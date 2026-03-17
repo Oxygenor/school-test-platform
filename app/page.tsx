@@ -26,7 +26,7 @@ export default function HomePage() {
           </div>
         </Card>
 
-        <Card>
+        {/* <Card>
           <h2 className="text-xl font-semibold">Що вже є в системі</h2>
           <div className="mt-4 space-y-3 text-slate-600">
             <div className="rounded-2xl bg-slate-50 p-4">Вибір класу 6 / 7 / 10</div>
@@ -36,7 +36,7 @@ export default function HomePage() {
             <div className="rounded-2xl bg-slate-50 p-4">Розблокування тільки по паролю вчителя</div>
             <div className="rounded-2xl bg-slate-50 p-4">Адмінка вчителя по класах</div>
           </div>
-        </Card>
+        </Card> */}
       </div>
       
     </PageContainer>
