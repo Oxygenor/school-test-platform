@@ -198,12 +198,7 @@ useEffect(() => {
         </div>
 
         <div className="mt-6">
-          <button
-            onClick={() => router.push('/')}
-            className="rounded-2xl bg-slate-200 px-5 py-3 text-slate-900 hover:bg-slate-300"
-          >
-            Вийти
-          </button>
+   
         </div>
       </div>
 
