@@ -199,14 +199,14 @@ function ExamContent() {
               key={task}
               className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
             >
-              <div className="flex items-start gap-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-lg font-bold text-white md:h-12 md:w-12">
+              <div className="space-y-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 text-lg font-bold text-white">
                   {index + 1}
                 </div>
 
-                <div className="flex-1">
-                  <div className="rounded-2xl bg-slate-50 px-4 py-4 text-slate-900 md:px-5">
-                    <div className="whitespace-pre-line text-[1.15rem] leading-8 font-serif md:text-[1.45rem] md:leading-10">
+                <div>
+                  <div className="w-full rounded-2xl bg-slate-50 px-4 py-4 text-slate-900 md:px-5">
+                    <div className="whitespace-pre-line text-[1.1rem] leading-8 font-serif md:text-[1.45rem] md:leading-10">
                       {task}
                     </div>
                   </div>
