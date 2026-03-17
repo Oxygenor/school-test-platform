@@ -168,7 +168,7 @@ function ExamContent() {
   return (
     <div className="min-h-screen bg-slate-50 p-8">
       <div className="mx-auto max-w-5xl rounded-[2rem] bg-white p-8 shadow-xl md:p-10">
-        <div className="flex flex-col gap-4 border-b border-slate-200 pb-6 md:flex-row md:items-start md:justify-between">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start border-b border-slate-200 pb-6 md:flex-row md:items-start md:justify-between">
           <div>
             <div className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-500">
               {work.workType}
@@ -200,18 +200,18 @@ function ExamContent() {
               className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
             >
               <div className="flex items-start gap-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-lg font-bold text-white">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-lg font-bold text-white md:h-12 md:w-12">
                   {index + 1}
                 </div>
 
                 <div className="flex-1">
-                  <div className="rounded-2xl bg-slate-50 px-5 py-4 text-slate-900">
-                    <div className="whitespace-pre-line text-lg leading-9 md:text-[1.45rem] md:leading-10 font-serif">
+                  <div className="rounded-2xl bg-slate-50 px-4 py-4 text-slate-900 md:px-5">
+                    <div className="whitespace-pre-line text-[1.15rem] leading-8 font-serif md:text-[1.45rem] md:leading-10">
                       {task}
                     </div>
                   </div>
 
-                  <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-white p-4 text-sm text-slate-500">
+                  <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-white p-3 text-sm text-slate-500 md:p-4">
                     Відповідь учень виконує на паперовому аркуші.
                   </div>
                 </div>
