@@ -7,7 +7,7 @@ export default function HomePage() {
     <>
     <StudentSessionGuard />
     <PageContainer>
-      <div className="mx-auto grid max-w-5xl gap-6 md:grid-cols-2">
+      <div className="mx-auto grid max-w-5xl gap-6 md:grid-cols-1">
         <Card>
           <div className="mb-3 inline-block rounded-full bg-slate-100 px-4 py-2 text-sm text-slate-600">
             Платформа контролю самостійних і контрольних робіт
