@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Card, PageContainer, Title } from '@/components/ui';
+import { StudentSessionGuard } from '@/components/student-session-guard';
 
 interface StudentItem {
   id: string;
@@ -78,6 +79,7 @@ export default function StudentRegisterPage() {
   }
 
   return (
+    <><StudentSessionGuard />
     <PageContainer>
       <div className="mx-auto max-w-3xl">
         <Card>
@@ -136,5 +138,6 @@ export default function StudentRegisterPage() {
         </Card>
       </div>
     </PageContainer>
+    </>
   );
 }

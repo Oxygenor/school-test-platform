@@ -34,6 +34,20 @@ function ExamContent() {
     loadSession();
   }, [sessionId]);
 
+useEffect(() => {
+  window.history.pushState(null, '', window.location.href);
+
+  const onPopState = () => {
+    window.history.pushState(null, '', window.location.href);
+  };
+
+  window.addEventListener('popstate', onPopState);
+
+  return () => {
+    window.removeEventListener('popstate', onPopState);
+  };
+}, []);
+
   useEffect(() => {
     if (!session || session.status !== 'blocked' || !session.blocked_at) return;
 

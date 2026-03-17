@@ -1,8 +1,11 @@
 import Link from 'next/link';
 import { Card, PageContainer, Title } from '@/components/ui';
+import { StudentSessionGuard } from '@/components/student-session-guard';
 
 export default function HomePage() {
   return (
+    <>
+    <StudentSessionGuard />
     <PageContainer>
       <div className="mx-auto grid max-w-5xl gap-6 md:grid-cols-2">
         <Card>
@@ -35,6 +38,8 @@ export default function HomePage() {
           </div>
         </Card>
       </div>
+      
     </PageContainer>
+    </>
   );
 }

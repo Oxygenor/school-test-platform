@@ -4,6 +4,7 @@ import { Suspense } from 'react';
 import { useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Button, Card, PageContainer, Title } from '@/components/ui';
+import { StudentSessionGuard } from '@/components/student-session-guard';
 
 function VariantContent() {
   const router = useRouter();
@@ -93,6 +94,7 @@ function VariantContent() {
 
 export default function StudentVariantPage() {
   return (
+    <><StudentSessionGuard />
     <Suspense
       fallback={
         <PageContainer>
@@ -104,5 +106,6 @@ export default function StudentVariantPage() {
     >
       <VariantContent />
     </Suspense>
+    </>
   );
 }
