@@ -39,16 +39,21 @@ function VariantContent() {
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <Button className="py-6 text-2xl" onClick={() => chooseVariant(1)}>
+            <button
+              type="button"
+              className="rounded-3xl bg-slate-950 px-6 py-6 text-2xl font-semibold text-white transition hover:bg-slate-800"
+              onClick={() => chooseVariant(1)}
+            >
               Варіант 1
-            </Button>
+            </button>
 
-            <Button
-              className="bg-white py-6 text-2xl text-slate-900 hover:bg-slate-100"
+            <button
+              type="button"
+              className="rounded-3xl border-2 border-slate-300 bg-white px-6 py-6 text-2xl font-semibold text-slate-900 transition hover:border-slate-500 hover:bg-slate-50"
               onClick={() => chooseVariant(2)}
             >
               Варіант 2
-            </Button>
+            </button>
           </div>
         </Card>
       </div>
