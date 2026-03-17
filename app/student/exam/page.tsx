@@ -205,11 +205,13 @@ function ExamContent() {
                 </div>
 
                 <div className="flex-1">
-                  <div className="text-lg leading-8 text-slate-900 md:text-xl">
-                    {task}
+                  <div className="rounded-2xl bg-slate-50 px-5 py-4 text-slate-900">
+                    <div className="whitespace-pre-line text-lg leading-9 md:text-[1.45rem] md:leading-10 font-serif">
+                      {task}
+                    </div>
                   </div>
 
-                  <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500">
+                  <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-white p-4 text-sm text-slate-500">
                     Відповідь учень виконує на паперовому аркуші.
                   </div>
                 </div>
