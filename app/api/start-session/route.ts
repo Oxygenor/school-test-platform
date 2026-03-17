@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 
 export async function POST(req: Request) {
   try {
-    const { classId, fullName, variant } = await req.json();
+    const { classId, studentId, fullName, variant } = await req.json();
 
     if (![6, 7, 10].includes(Number(classId))) {
       return NextResponse.json({ ok: false, error: 'Некоректний клас' }, { status: 400 });
@@ -13,16 +13,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: 'Некоректний варіант' }, { status: 400 });
     }
 
-    const cleanName = String(fullName || '').trim();
-    if (!cleanName) {
-      return NextResponse.json({ ok: false, error: 'Не вказано ПІБ' }, { status: 400 });
+    if (!studentId) {
+      return NextResponse.json({ ok: false, error: 'Не вказано учня' }, { status: 400 });
     }
 
     const { data: existing, error: existingError } = await supabaseAdmin
       .from('student_sessions')
       .select('*')
-      .eq('class_id', Number(classId))
-      .ilike('full_name', cleanName)
+      .eq('student_id', studentId)
       .in('status', ['writing', 'blocked'])
       .order('started_at', { ascending: false })
       .limit(1)
@@ -42,7 +40,8 @@ export async function POST(req: Request) {
       .from('student_sessions')
       .insert({
         class_id: Number(classId),
-        full_name: cleanName,
+        student_id: studentId,
+        full_name: String(fullName || '').trim(),
         variant: Number(variant),
         work_type: workType,
         status: 'writing',
@@ -57,7 +56,7 @@ export async function POST(req: Request) {
     await supabaseAdmin.from('session_events').insert({
       session_id: data.id,
       event_type: 'started',
-      event_payload: { classId, variant, fullName: cleanName },
+      event_payload: { classId, variant, fullName, studentId },
     });
 
     return NextResponse.json({ ok: true, session: data });
