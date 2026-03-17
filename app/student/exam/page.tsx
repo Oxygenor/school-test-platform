@@ -34,19 +34,19 @@ function ExamContent() {
     loadSession();
   }, [sessionId]);
 
-useEffect(() => {
-  window.history.pushState(null, '', window.location.href);
-
-  const onPopState = () => {
+  useEffect(() => {
     window.history.pushState(null, '', window.location.href);
-  };
 
-  window.addEventListener('popstate', onPopState);
+    const onPopState = () => {
+      window.history.pushState(null, '', window.location.href);
+    };
 
-  return () => {
-    window.removeEventListener('popstate', onPopState);
-  };
-}, []);
+    window.addEventListener('popstate', onPopState);
+
+    return () => {
+      window.removeEventListener('popstate', onPopState);
+    };
+  }, []);
 
   useEffect(() => {
     if (!session || session.status !== 'blocked' || !session.blocked_at) return;
@@ -78,11 +78,11 @@ useEffect(() => {
       setSession((prev) =>
         prev
           ? {
-              ...prev,
-              status: 'blocked',
-              block_reason: reason,
-              blocked_at: blockedAt,
-            }
+            ...prev,
+            status: 'blocked',
+            block_reason: reason,
+            blocked_at: blockedAt,
+          }
           : prev
       );
 
@@ -167,38 +167,59 @@ useEffect(() => {
 
   return (
     <div className="min-h-screen bg-slate-50 p-8">
-      <div className="mx-auto max-w-5xl rounded-3xl bg-white p-8 shadow-xl">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="mx-auto max-w-5xl rounded-[2rem] bg-white p-8 shadow-xl md:p-10">
+        <div className="flex flex-col gap-4 border-b border-slate-200 pb-6 md:flex-row md:items-start md:justify-between">
           <div>
-            <div className="text-sm uppercase tracking-[0.2em] text-slate-500">
+            <div className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-500">
               {work.workType}
             </div>
-            <h1 className="mt-2 text-3xl font-bold">{work.title}</h1>
+            <h1 className="mt-3 text-3xl font-bold text-slate-950 md:text-4xl">
+              {work.title}
+            </h1>
+            <p className="mt-3 text-base text-slate-600">
+              Учень бачить завдання на екрані, а всі відповіді записує тільки на паперовому аркуші.
+            </p>
           </div>
 
-          <div className="rounded-full border border-slate-300 px-4 py-2 text-sm">
-            Варіант {session.variant} · {session.class_id} клас
+          <div className="flex gap-3">
+            <div className="rounded-2xl border border-slate-300 bg-slate-50 px-5 py-3 text-sm font-medium text-slate-700">
+              Варіант {session.variant}
+            </div>
+            <div className="rounded-2xl border border-slate-300 bg-slate-50 px-5 py-3 text-sm font-medium text-slate-700">
+              {session.class_id} клас
+            </div>
           </div>
         </div>
 
-        <div className="mt-6 rounded-2xl bg-slate-50 p-4 text-slate-700">
-          Учень бачить завдання на екрані, а всі відповіді записує тільки на
-          паперовому аркуші.
-        </div>
 
-        <div className="mt-6 space-y-4">
-          {work.tasks.map((task) => (
-            <div key={task} className="rounded-3xl border border-slate-200 p-5">
-              <div className="text-lg font-medium">{task}</div>
-              <div className="mt-3 rounded-2xl border border-dashed border-slate-300 p-4 text-sm text-slate-500">
-                Відповідь виконується на папері. Поля вводу на сайті немає.
+
+        <div className="mt-8 space-y-5">
+          {work.tasks.map((task, index) => (
+            <div
+              key={task}
+              className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+            >
+              <div className="flex items-start gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-lg font-bold text-white">
+                  {index + 1}
+                </div>
+
+                <div className="flex-1">
+                  <div className="text-lg leading-8 text-slate-900 md:text-xl">
+                    {task}
+                  </div>
+
+                  <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500">
+                    Відповідь учень виконує на паперовому аркуші.
+                  </div>
+                </div>
               </div>
             </div>
           ))}
         </div>
 
         <div className="mt-6">
-   
+
         </div>
       </div>
 
