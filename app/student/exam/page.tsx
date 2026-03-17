@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { works } from '@/data/works';
 import { StudentSession } from '@/types';
 import { formatSeconds } from '@/lib/utils';
 
-export default function StudentExamPage() {
+function ExamContent() {
   const router = useRouter();
   const params = useSearchParams();
   const sessionId = params.get('sessionId');
@@ -238,5 +238,21 @@ export default function StudentExamPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function StudentExamPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-50 p-8">
+          <div className="mx-auto max-w-3xl text-center text-slate-600">
+            Завантаження...
+          </div>
+        </div>
+      }
+    >
+      <ExamContent />
+    </Suspense>
   );
 }
