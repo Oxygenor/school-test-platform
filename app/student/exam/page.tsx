@@ -370,7 +370,7 @@ useEffect(() => {
         </div>
       )}
 
-{warningVisible && (
+{/* {warningVisible && (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 text-white">
     <div className="rounded-2xl bg-white p-8 text-center text-black max-w-md">
       <h2 className="text-xl font-bold mb-3">
@@ -386,7 +386,7 @@ useEffect(() => {
       </p>
     </div>
   </div>
-)}
+)} */}
 
     </div>
   );
