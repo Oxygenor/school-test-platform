@@ -405,9 +405,11 @@ export default function StudentExamPage() {
         </div>
       }
     >
-      <ExamContent />
       <Calculator/>
+      <ExamContent />
+      
     </Suspense>
+    
   );
 }
 
