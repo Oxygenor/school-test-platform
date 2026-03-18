@@ -1,10 +1,11 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { works } from '@/data/works';
 import { StudentSession } from '@/types';
 import { formatSeconds } from '@/lib/utils';
+import Calculator from '@/components/calculator'
 
 function ExamContent() {
   const router = useRouter();
@@ -16,6 +17,103 @@ function ExamContent() {
   const [unlockPassword, setUnlockPassword] = useState('');
   const [unlockError, setUnlockError] = useState('');
   const [secondsBlocked, setSecondsBlocked] = useState(0);
+  const wakeLockRef = useRef<any>(null);
+
+  const [focusLostCount, setFocusLostCount] = useState(0);
+  const [warningVisible, setWarningVisible] = useState(false);
+  const timerRef = useRef<any>(null);
+
+  const [blocked, setBlocked] = useState(false);
+
+  function blockSession() {
+    setBlocked(true);
+  }
+
+useEffect(() => {
+
+  function preventReload(e:any){
+    e.preventDefault();
+    e.returnValue = '';
+  }
+
+  window.addEventListener('beforeunload', preventReload);
+
+  return () => {
+    window.removeEventListener('beforeunload', preventReload);
+  };
+
+}, []);
+
+useEffect(() => {
+
+  function disableCopy(e:any){
+    e.preventDefault();
+  }
+
+  document.addEventListener('copy', disableCopy);
+  document.addEventListener('cut', disableCopy);
+  document.addEventListener('paste', disableCopy);
+  document.addEventListener('contextmenu', disableCopy);
+
+  return () => {
+    document.removeEventListener('copy', disableCopy);
+    document.removeEventListener('cut', disableCopy);
+    document.removeEventListener('paste', disableCopy);
+    document.removeEventListener('contextmenu', disableCopy);
+  };
+
+}, []);
+
+  useEffect(() => {
+    function handleBlur() {
+      if (focusLostCount >= 3) {
+        blockSession();
+        return;
+      }
+
+      setWarningVisible(true);
+
+      timerRef.current = setTimeout(() => {
+        blockSession();
+      }, 5000);
+    }
+
+    function handleFocus() {
+      if (warningVisible) {
+        clearTimeout(timerRef.current);
+        setWarningVisible(false);
+        setFocusLostCount((prev) => prev + 1);
+      }
+    }
+
+    window.addEventListener('blur', handleBlur);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [focusLostCount]);
+
+  useEffect(() => {
+    async function enableWakeLock() {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+        }
+      } catch (err) {
+        console.log(err);
+      }
+    }
+
+    enableWakeLock();
+
+    return () => {
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     async function loadSession() {
@@ -225,6 +323,8 @@ function ExamContent() {
         </div>
       </div>
 
+
+
       {session.status === 'blocked' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-6">
           <div className="w-full max-w-2xl rounded-[2rem] bg-white p-8 shadow-2xl">
@@ -269,8 +369,29 @@ function ExamContent() {
           </div>
         </div>
       )}
+
+{warningVisible && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 text-white">
+    <div className="rounded-2xl bg-white p-8 text-center text-black max-w-md">
+      <h2 className="text-xl font-bold mb-3">
+        Ви покинули сторінку тесту
+      </h2>
+
+      <p className="mb-2">
+        Поверніться на сторінку протягом 5 секунд
+      </p>
+
+      <p>
+        Залишилось спроб: {3 - focusLostCount}
+      </p>
+    </div>
+  </div>
+)}
+
     </div>
   );
+
+  
 }
 
 export default function StudentExamPage() {
@@ -285,6 +406,8 @@ export default function StudentExamPage() {
       }
     >
       <ExamContent />
+      <Calculator/>
     </Suspense>
   );
 }
+
