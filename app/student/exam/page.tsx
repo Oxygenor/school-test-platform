@@ -405,7 +405,7 @@ export default function StudentExamPage() {
         </div>
       }
     >
-      <Calculator/>
+      
       <ExamContent />
       
     </Suspense>
@@ -413,3 +413,4 @@ export default function StudentExamPage() {
   );
 }
 
+//<Calculator/>
