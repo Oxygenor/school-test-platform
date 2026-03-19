@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense } from 'react';
 import { useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Button, Card, PageContainer, Title } from '@/components/ui';
@@ -8,18 +8,6 @@ import { StudentSessionGuard } from '@/components/student-session-guard';
 
 function VariantContent() {
   const router = useRouter();
-  const [notifPermission, setNotifPermission] = useState<NotificationPermission | null>(null);
-
-  useEffect(() => {
-    if ('Notification' in window) {
-      setNotifPermission(Notification.permission);
-    }
-  }, []);
-
-  async function requestNotifications() {
-    const perm = await Notification.requestPermission();
-    setNotifPermission(perm);
-  }
 
   useEffect(() => {
     async function checkExistingSession() {
@@ -62,8 +50,6 @@ function VariantContent() {
     const data = await response.json();
     if (!data.ok) return;
 
-
-
     localStorage.setItem('studentSessionId', data.session.id);
     localStorage.setItem('studentFullName', fullName ?? '');
     localStorage.setItem('studentClassId', String(classId ?? ''));
@@ -81,29 +67,7 @@ function VariantContent() {
             Учень: <strong>{fullName}</strong> · Клас: <strong>{classId}</strong>
           </div>
 
-          {notifPermission === 'default' && (
-            <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-              <p className="text-sm font-medium text-amber-800">
-                Дозвольте сповіщення — якщо ви випадково вийдете зі сторінки під час роботи, браузер нагадає вам повернутися.
-              </p>
-              <button
-                onClick={requestNotifications}
-                className="mt-3 rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600"
-              >
-                Дозволити сповіщення
-              </button>
-            </div>
-          )}
-
-          {notifPermission === 'granted' && (
-            <div className="mt-6 rounded-2xl border border-green-200 bg-green-50 p-4">
-              <p className="text-sm font-medium text-green-800">
-                Сповіщення увімкнено. Браузер нагадає вам повернутися, якщо ви випадково вийдете.
-              </p>
-            </div>
-          )}
-
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
+          <div className="mt-6 grid gap-4 grid-cols-2">
             <button
               type="button"
               className="rounded-3xl bg-slate-950 px-6 py-6 text-2xl font-semibold text-white transition hover:bg-slate-800"

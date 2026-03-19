@@ -5,8 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { works } from '@/data/works';
 import { StudentSession } from '@/types';
 import { formatSeconds } from '@/lib/utils';
-import Calculator from '@/components/calculator'
-import NoSleep from 'nosleep.js'
+import Calculator from '@/components/calculator';
+import NoSleep from 'nosleep.js';
 
 function ExamContent() {
   const router = useRouter();
@@ -29,101 +29,87 @@ function ExamContent() {
   const focusLostCountRef = useRef(0);
   const countdownIntervalRef = useRef<any>(null);
   const cancelWarningRef = useRef<() => void>(() => {});
-  const notificationRef = useRef<Notification | null>(null);
 
-useEffect(() => {
+  // Заборона перезавантаження
+  useEffect(() => {
+    function preventReload(e: any) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+    window.addEventListener('beforeunload', preventReload);
+    return () => window.removeEventListener('beforeunload', preventReload);
+  }, []);
 
-  function preventReload(e:any){
-    e.preventDefault();
-    e.returnValue = '';
-  }
+  // Заборона копіювання
+  useEffect(() => {
+    function disableCopy(e: any) { e.preventDefault(); }
+    document.addEventListener('copy', disableCopy);
+    document.addEventListener('cut', disableCopy);
+    document.addEventListener('paste', disableCopy);
+    document.addEventListener('contextmenu', disableCopy);
+    return () => {
+      document.removeEventListener('copy', disableCopy);
+      document.removeEventListener('cut', disableCopy);
+      document.removeEventListener('paste', disableCopy);
+      document.removeEventListener('contextmenu', disableCopy);
+    };
+  }, []);
 
-  window.addEventListener('beforeunload', preventReload);
+  // Повноекранний режим (Android Chrome)
+  useEffect(() => {
+    const el = document.documentElement as any;
+    if (el.requestFullscreen) {
+      el.requestFullscreen().catch(() => {});
+    } else if (el.webkitRequestFullscreen) {
+      el.webkitRequestFullscreen();
+    }
+    return () => {
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      }
+    };
+  }, []);
 
-  return () => {
-    window.removeEventListener('beforeunload', preventReload);
-  };
-
-}, []);
-
-useEffect(() => {
-
-  function disableCopy(e:any){
-    e.preventDefault();
-  }
-
-  document.addEventListener('copy', disableCopy);
-  document.addEventListener('cut', disableCopy);
-  document.addEventListener('paste', disableCopy);
-  document.addEventListener('contextmenu', disableCopy);
-
-  return () => {
-    document.removeEventListener('copy', disableCopy);
-    document.removeEventListener('cut', disableCopy);
-    document.removeEventListener('paste', disableCopy);
-    document.removeEventListener('contextmenu', disableCopy);
-  };
-
-}, []);
-
-
-
+  // Не гасити екран
   useEffect(() => {
     noSleepRef.current = new NoSleep();
     noSleepRef.current.enable();
-
-    return () => {
-      noSleepRef.current?.disable();
-    };
+    return () => noSleepRef.current?.disable();
   }, []);
 
+  // Завантаження сесії
   useEffect(() => {
     async function loadSession() {
       if (!sessionId) return;
-
       const response = await fetch(`/api/get-session?sessionId=${sessionId}`);
       const data = await response.json();
-
-      if (data.ok) {
-        setSession(data.session);
-      }
-
+      if (data.ok) setSession(data.session);
       setLoading(false);
     }
-
     loadSession();
   }, [sessionId]);
 
+  // Блокування кнопки назад
   useEffect(() => {
     window.history.pushState(null, '', window.location.href);
-
-    const onPopState = () => {
-      window.history.pushState(null, '', window.location.href);
-    };
-
+    const onPopState = () => window.history.pushState(null, '', window.location.href);
     window.addEventListener('popstate', onPopState);
-
-    return () => {
-      window.removeEventListener('popstate', onPopState);
-    };
+    return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
+  // Таймер блокування
   useEffect(() => {
     if (!session || session.status !== 'blocked' || !session.blocked_at) return;
-
     const updateTimer = () => {
-      const diff = Math.floor(
-        (Date.now() - new Date(session.blocked_at as string).getTime()) / 1000
-      );
+      const diff = Math.floor((Date.now() - new Date(session.blocked_at as string).getTime()) / 1000);
       setSecondsBlocked(diff > 0 ? diff : 0);
     };
-
     updateTimer();
     const timer = setInterval(updateTimer, 1000);
-
     return () => clearInterval(timer);
   }, [session]);
 
+  // Система попереджень і блокування
   useEffect(() => {
     if (!sessionId || !session || session.status === 'blocked') return;
 
@@ -136,7 +122,6 @@ useEffect(() => {
       clearInterval(countdownIntervalRef.current);
       setWarningVisible(false);
       warningVisibleRef.current = false;
-      notificationRef.current?.close();
 
       const blockedAt = new Date().toISOString();
       setSession((prev) =>
@@ -163,13 +148,6 @@ useEffect(() => {
       setWarningVisible(true);
       setWarningCountdown(10);
 
-      if ('Notification' in window && Notification.permission === 'granted') {
-        notificationRef.current = new Notification('⚠️ Поверніться на сторінку тесту!', {
-          body: 'У вас є 10 секунд, інакше роботу буде заблоковано.',
-          requireInteraction: true,
-        });
-      }
-
       let remaining = 10;
       countdownIntervalRef.current = setInterval(() => {
         remaining -= 1;
@@ -186,7 +164,6 @@ useEffect(() => {
       clearInterval(countdownIntervalRef.current);
       warningVisibleRef.current = false;
       setWarningVisible(false);
-      notificationRef.current?.close();
       focusLostCountRef.current += 1;
       setFocusLostCount(focusLostCountRef.current);
     };
@@ -236,7 +213,7 @@ useEffect(() => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 p-8">
+      <div className="min-h-screen bg-slate-50 p-4">
         <div className="mx-auto max-w-3xl text-center text-slate-600">
           Завантаження...
         </div>
@@ -246,7 +223,7 @@ useEffect(() => {
 
   if (!session || !work) {
     return (
-      <div className="min-h-screen bg-slate-50 p-8">
+      <div className="min-h-screen bg-slate-50 p-4">
         <div className="mx-auto max-w-3xl text-center text-slate-600">
           Сесію не знайдено.
         </div>
@@ -255,53 +232,54 @@ useEffect(() => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-8">
-      <div className="mx-auto max-w-5xl rounded-[2rem] bg-white p-8 shadow-xl md:p-10">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start border-b border-slate-200 pb-6 md:flex-row md:items-start md:justify-between">
+    <div className="min-h-screen bg-slate-50 p-3 md:p-8">
+      <div className="mx-auto max-w-5xl rounded-2xl bg-white p-4 shadow-xl md:rounded-[2rem] md:p-10">
+
+        {/* Шапка */}
+        <div className="flex flex-col gap-3 border-b border-slate-200 pb-4 md:flex-row md:items-start md:justify-between md:pb-6">
           <div>
-            <div className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-500">
+            <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 md:text-sm">
               {work.workType}
             </div>
-            <h1 className="mt-3 text-3xl font-bold text-slate-950 md:text-4xl">
+            <h1 className="mt-2 text-2xl font-bold text-slate-950 md:mt-3 md:text-4xl">
               {work.title}
             </h1>
-            <p className="mt-3 text-base text-slate-600">
-              Учень бачить завдання на екрані, а всі відповіді записує тільки на паперовому аркуші.
+            <p className="mt-2 text-sm text-slate-600 md:mt-3 md:text-base">
+              Відповіді записуй тільки на паперовому аркуші.
             </p>
           </div>
 
-          <div className="flex gap-3">
-            <div className="rounded-2xl border border-slate-300 bg-slate-50 px-5 py-3 text-sm font-medium text-slate-700">
+          <div className="flex gap-2">
+            <div className="rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700 md:rounded-2xl md:px-5 md:py-3 md:text-sm">
               Варіант {session.variant}
             </div>
-            <div className="rounded-2xl border border-slate-300 bg-slate-50 px-5 py-3 text-sm font-medium text-slate-700">
+            <div className="rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700 md:rounded-2xl md:px-5 md:py-3 md:text-sm">
               {session.class_id} клас
             </div>
           </div>
         </div>
 
-
-
-        <div className="mt-8 space-y-5">
+        {/* Завдання */}
+        <div className="mt-4 space-y-4 md:mt-8 md:space-y-5">
           {work.tasks.map((task, index) => (
             <div
               key={task}
-              className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+              className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:rounded-3xl md:p-6"
             >
-              <div className="space-y-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 text-lg font-bold text-white">
+              <div className="space-y-3 md:space-y-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-base font-bold text-white md:h-12 md:w-12 md:rounded-2xl md:text-lg">
                   {index + 1}
                 </div>
 
                 <div>
-                  <div className="w-full rounded-2xl bg-slate-50 px-4 py-4 text-slate-900 md:px-5">
-                    <div className="whitespace-pre-line text-[1.1rem] leading-8 font-serif md:text-[1.45rem] md:leading-10">
+                  <div className="w-full rounded-xl bg-slate-50 px-4 py-3 text-slate-900 md:rounded-2xl md:px-5 md:py-4">
+                    <div className="whitespace-pre-line font-serif text-lg leading-8 md:text-[1.45rem] md:leading-10">
                       {task}
                     </div>
                   </div>
 
-                  <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-white p-3 text-sm text-slate-500 md:p-4">
-                    Відповідь учень виконує на паперовому аркуші.
+                  <div className="mt-3 rounded-xl border border-dashed border-slate-300 bg-white p-3 text-xs text-slate-500 md:rounded-2xl md:p-4 md:text-sm">
+                    Відповідь виконується на паперовому аркуші.
                   </div>
                 </div>
               </div>
@@ -309,42 +287,40 @@ useEffect(() => {
           ))}
         </div>
 
-        <div className="mt-6">
-
-        </div>
+        {/* Відступ знизу для кнопки калькулятора */}
+        <div className="mt-20" />
       </div>
 
-
-
+      {/* Калькулятор */}
       {calcOpen && <Calculator onClose={() => setCalcOpen(false)} />}
 
       <button
         onClick={() => setCalcOpen(prev => !prev)}
-        className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-white shadow-xl hover:bg-slate-700 text-2xl"
+        className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-white shadow-xl text-2xl"
         aria-label="Калькулятор"
-        title="Калькулятор"
       >
         🧮
       </button>
 
+      {/* Блокування */}
       {session.status === 'blocked' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-6">
-          <div className="w-full max-w-2xl rounded-[2rem] bg-white p-8 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4">
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl md:rounded-[2rem] md:p-8">
             <div className="text-center">
-              <div className="text-3xl font-bold">Роботу заблоковано</div>
-              <p className="mt-3 text-slate-600">
+              <div className="text-2xl font-bold md:text-3xl">Роботу заблоковано</div>
+              <p className="mt-3 text-sm text-slate-600 md:text-base">
                 Причина: {session.block_reason || 'Зафіксовано порушення'}
               </p>
 
-              <div className="mt-8 text-sm uppercase tracking-[0.3em] text-slate-500">
+              <div className="mt-6 text-xs uppercase tracking-[0.3em] text-slate-500 md:mt-8">
                 Час у блокуванні
               </div>
-              <div className="mt-2 text-6xl font-bold">
+              <div className="mt-2 text-5xl font-bold md:text-6xl">
                 {formatSeconds(secondsBlocked)}
               </div>
             </div>
 
-            <div className="mx-auto mt-8 max-w-md">
+            <div className="mx-auto mt-6 max-w-md md:mt-8">
               <label className="mb-2 block text-sm font-medium">
                 Пароль розблокування
               </label>
@@ -357,13 +333,13 @@ useEffect(() => {
                 className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-700"
               />
 
-              {unlockError ? (
+              {unlockError && (
                 <p className="mt-2 text-sm text-red-600">{unlockError}</p>
-              ) : null}
+              )}
 
               <button
                 onClick={unlock}
-                className="mt-4 w-full rounded-2xl bg-slate-900 px-5 py-3 text-white hover:bg-slate-700"
+                className="mt-4 w-full rounded-2xl bg-slate-900 px-5 py-3 text-white"
               >
                 Розблокувати
               </button>
@@ -372,51 +348,45 @@ useEffect(() => {
         </div>
       )}
 
+      {/* Попередження при виході */}
       {warningVisible && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6">
-          <div className="w-full max-w-md rounded-[2rem] bg-white p-8 text-center shadow-2xl">
-            <div className="text-5xl font-bold text-red-500">{warningCountdown}</div>
-            <h2 className="mt-4 text-2xl font-bold text-slate-900">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-2xl md:rounded-[2rem] md:p-8">
+            <div className="text-6xl font-bold text-red-500">{warningCountdown}</div>
+            <h2 className="mt-4 text-xl font-bold text-slate-900 md:text-2xl">
               Ви покинули сторінку тесту
             </h2>
-            <p className="mt-3 text-slate-600">
+            <p className="mt-3 text-sm text-slate-600 md:text-base">
               Поверніться протягом <strong>{warningCountdown} сек</strong>, інакше роботу буде заблоковано.
             </p>
-            <p className="mt-4 text-sm text-slate-400">
+            <p className="mt-3 text-sm text-slate-400">
               Залишилось спроб: {3 - focusLostCount}
             </p>
             <button
               onClick={() => cancelWarningRef.current()}
-              className="mt-6 w-full rounded-2xl bg-slate-900 px-5 py-3 text-white hover:bg-slate-700"
+              className="mt-5 w-full rounded-2xl bg-slate-900 px-5 py-3 text-base font-medium text-white"
             >
               Я повернувся, продовжити роботу
             </button>
           </div>
         </div>
       )}
-
     </div>
   );
-
-  
 }
 
 export default function StudentExamPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-slate-50 p-8">
+        <div className="min-h-screen bg-slate-50 p-4">
           <div className="mx-auto max-w-3xl text-center text-slate-600">
             Завантаження...
           </div>
         </div>
       }
     >
-      
       <ExamContent />
-      
     </Suspense>
-    
   );
 }
-
