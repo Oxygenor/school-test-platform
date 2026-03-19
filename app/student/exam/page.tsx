@@ -6,6 +6,7 @@ import { works } from '@/data/works';
 import { StudentSession } from '@/types';
 import { formatSeconds } from '@/lib/utils';
 import Calculator from '@/components/calculator'
+import NoSleep from 'nosleep.js'
 
 function ExamContent() {
   const router = useRouter();
@@ -18,17 +19,15 @@ function ExamContent() {
   const [unlockPassword, setUnlockPassword] = useState('');
   const [unlockError, setUnlockError] = useState('');
   const [secondsBlocked, setSecondsBlocked] = useState(0);
-  const wakeLockRef = useRef<any>(null);
+  const noSleepRef = useRef<any>(null);
 
   const [focusLostCount, setFocusLostCount] = useState(0);
   const [warningVisible, setWarningVisible] = useState(false);
-  const timerRef = useRef<any>(null);
+  const [warningCountdown, setWarningCountdown] = useState(10);
 
-  const [blocked, setBlocked] = useState(false);
-
-  function blockSession() {
-    setBlocked(true);
-  }
+  const warningVisibleRef = useRef(false);
+  const focusLostCountRef = useRef(0);
+  const countdownIntervalRef = useRef<any>(null);
 
 useEffect(() => {
 
@@ -65,54 +64,13 @@ useEffect(() => {
 
 }, []);
 
-  useEffect(() => {
-    function handleBlur() {
-      if (focusLostCount >= 3) {
-        blockSession();
-        return;
-      }
-
-      setWarningVisible(true);
-
-      timerRef.current = setTimeout(() => {
-        blockSession();
-      }, 5000);
-    }
-
-    function handleFocus() {
-      if (warningVisible) {
-        clearTimeout(timerRef.current);
-        setWarningVisible(false);
-        setFocusLostCount((prev) => prev + 1);
-      }
-    }
-
-    window.addEventListener('blur', handleBlur);
-    window.addEventListener('focus', handleFocus);
-
-    return () => {
-      window.removeEventListener('blur', handleBlur);
-      window.removeEventListener('focus', handleFocus);
-    };
-  }, [focusLostCount]);
 
   useEffect(() => {
-    async function enableWakeLock() {
-      try {
-        if ('wakeLock' in navigator) {
-          wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
-        }
-      } catch (err) {
-        console.log(err);
-      }
-    }
-
-    enableWakeLock();
+    noSleepRef.current = new NoSleep();
+    noSleepRef.current.enable();
 
     return () => {
-      if (wakeLockRef.current) {
-        wakeLockRef.current.release();
-      }
+      noSleepRef.current?.disable();
     };
   }, []);
 
@@ -172,17 +130,13 @@ useEffect(() => {
       if (alreadyBlocked) return;
       alreadyBlocked = true;
 
-      const blockedAt = new Date().toISOString();
+      clearInterval(countdownIntervalRef.current);
+      setWarningVisible(false);
+      warningVisibleRef.current = false;
 
+      const blockedAt = new Date().toISOString();
       setSession((prev) =>
-        prev
-          ? {
-            ...prev,
-            status: 'blocked',
-            block_reason: reason,
-            blocked_at: blockedAt,
-          }
-          : prev
+        prev ? { ...prev, status: 'blocked', block_reason: reason, blocked_at: blockedAt } : prev
       );
 
       const response = await fetch('/api/block-session', {
@@ -190,30 +144,58 @@ useEffect(() => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId, reason }),
       });
-
       const data = await response.json();
+      if (data.ok) setSession(data.session);
+    }
 
-      if (data.ok) {
-        setSession(data.session);
+    function startWarning() {
+      if (warningVisibleRef.current) return;
+      if (focusLostCountRef.current >= 3) {
+        sendBlock('Перевищено кількість виходів зі сторінки');
+        return;
       }
+
+      warningVisibleRef.current = true;
+      setWarningVisible(true);
+      setWarningCountdown(10);
+
+      let remaining = 10;
+      countdownIntervalRef.current = setInterval(() => {
+        remaining -= 1;
+        setWarningCountdown(remaining);
+        if (remaining <= 0) {
+          clearInterval(countdownIntervalRef.current);
+          sendBlock('Учень не повернувся на сторінку вчасно');
+        }
+      }, 1000);
     }
 
-    function onVisibilityChange() {
-      if (document.hidden) {
-        sendBlock('Вкладка стала неактивною або браузер згорнули');
-      }
+    function cancelWarning() {
+      if (!warningVisibleRef.current) return;
+      clearInterval(countdownIntervalRef.current);
+      warningVisibleRef.current = false;
+      setWarningVisible(false);
+      focusLostCountRef.current += 1;
+      setFocusLostCount(focusLostCountRef.current);
     }
 
-    function onBlur() {
-      sendBlock('Сторінка втратила фокус');
+    function onHidden() {
+      if (document.hidden) startWarning();
+      else cancelWarning();
     }
 
-    document.addEventListener('visibilitychange', onVisibilityChange);
+    function onBlur() { startWarning(); }
+    function onFocus() { cancelWarning(); }
+
+    document.addEventListener('visibilitychange', onHidden);
     window.addEventListener('blur', onBlur);
+    window.addEventListener('focus', onFocus);
 
     return () => {
-      document.removeEventListener('visibilitychange', onVisibilityChange);
+      document.removeEventListener('visibilitychange', onHidden);
       window.removeEventListener('blur', onBlur);
+      window.removeEventListener('focus', onFocus);
+      clearInterval(countdownIntervalRef.current);
     };
   }, [sessionId, session]);
 
@@ -382,23 +364,22 @@ useEffect(() => {
         </div>
       )}
 
-{/* {warningVisible && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 text-white">
-    <div className="rounded-2xl bg-white p-8 text-center text-black max-w-md">
-      <h2 className="text-xl font-bold mb-3">
-        Ви покинули сторінку тесту
-      </h2>
-
-      <p className="mb-2">
-        Поверніться на сторінку протягом 5 секунд
-      </p>
-
-      <p>
-        Залишилось спроб: {3 - focusLostCount}
-      </p>
-    </div>
-  </div>
-)} */}
+      {warningVisible && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6">
+          <div className="w-full max-w-md rounded-[2rem] bg-white p-8 text-center shadow-2xl">
+            <div className="text-5xl font-bold text-red-500">{warningCountdown}</div>
+            <h2 className="mt-4 text-2xl font-bold text-slate-900">
+              Ви покинули сторінку тесту
+            </h2>
+            <p className="mt-3 text-slate-600">
+              Поверніться протягом <strong>{warningCountdown} сек</strong>, інакше роботу буде заблоковано.
+            </p>
+            <p className="mt-4 text-sm text-slate-400">
+              Залишилось спроб: {3 - focusLostCount}
+            </p>
+          </div>
+        </div>
+      )}
 
     </div>
   );
