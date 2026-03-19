@@ -14,6 +14,7 @@ function ExamContent() {
 
   const [session, setSession] = useState<StudentSession | null>(null);
   const [loading, setLoading] = useState(true);
+  const [calcOpen, setCalcOpen] = useState(false);
   const [unlockPassword, setUnlockPassword] = useState('');
   const [unlockError, setUnlockError] = useState('');
   const [secondsBlocked, setSecondsBlocked] = useState(0);
@@ -325,6 +326,17 @@ useEffect(() => {
 
 
 
+      {calcOpen && <Calculator onClose={() => setCalcOpen(false)} />}
+
+      <button
+        onClick={() => setCalcOpen(prev => !prev)}
+        className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-white shadow-xl hover:bg-slate-700 text-2xl"
+        aria-label="Калькулятор"
+        title="Калькулятор"
+      >
+        🧮
+      </button>
+
       {session.status === 'blocked' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-6">
           <div className="w-full max-w-2xl rounded-[2rem] bg-white p-8 shadow-2xl">
@@ -413,4 +425,3 @@ export default function StudentExamPage() {
   );
 }
 
-//<Calculator/>
