@@ -25,7 +25,7 @@ export async function POST(req: Request) {
   const { teacherPassword, classId, variant, workType, title, durationMinutes, tasks } =
     await req.json();
 
-  if (teacherPassword !== process.env.TEACHER_UNLOCK_PASSWORD) {
+  if (teacherPassword !== process.env.TEACHER_LOGIN_PASSWORD) {
     return NextResponse.json({ ok: false, error: 'Невірний пароль' }, { status: 401 });
   }
 
@@ -67,7 +67,7 @@ export async function DELETE(req: Request) {
   const variant = Number(searchParams.get('variant'));
   const teacherPassword = searchParams.get('teacherPassword');
 
-  if (teacherPassword !== process.env.TEACHER_UNLOCK_PASSWORD) {
+  if (teacherPassword !== process.env.TEACHER_LOGIN_PASSWORD) {
     return NextResponse.json({ ok: false, error: 'Невірний пароль' }, { status: 401 });
   }
 

@@ -25,7 +25,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const { classId, active, teacherPassword } = await req.json();
 
-  if (teacherPassword !== process.env.TEACHER_UNLOCK_PASSWORD) {
+  if (teacherPassword !== process.env.TEACHER_LOGIN_PASSWORD) {
     return NextResponse.json({ ok: false, error: 'Невірний пароль' }, { status: 401 });
   }
 

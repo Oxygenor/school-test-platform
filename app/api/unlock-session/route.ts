@@ -9,7 +9,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: 'Не вказано sessionId' }, { status: 400 });
     }
 
-    if (unlockPassword !== process.env.TEACHER_UNLOCK_PASSWORD) {
+    if (unlockPassword !== process.env.TEACHER_LOGIN_PASSWORD) {
       return NextResponse.json({ ok: false, error: 'Неправильний пароль розблокування' }, { status: 401 });
     }
 

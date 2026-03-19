@@ -22,6 +22,7 @@ export default function TeacherLoginPage() {
       return;
     }
 
+    sessionStorage.setItem('teacherPassword', password);
     router.push('/teacher/dashboard');
   }
 

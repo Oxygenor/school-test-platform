@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Card, PageContainer, Title } from '@/components/ui';
 
 const CLASS_IDS = [6, 7, 10];
@@ -13,34 +14,34 @@ interface ClassStatus {
 }
 
 export default function TeacherDashboardPage() {
+  const router = useRouter();
   const [statuses, setStatuses] = useState<ClassStatus[]>(
     CLASS_IDS.map((id) => ({ classId: id, active: false, loading: true }))
   );
   const [password, setPassword] = useState('');
-  const [passwordSaved, setPasswordSaved] = useState(false);
 
   useEffect(() => {
     const saved = sessionStorage.getItem('teacherPassword');
-    if (saved) { setPassword(saved); setPasswordSaved(true); }
-  }, []);
-
-  useEffect(() => {
-    async function loadStatuses() {
-      const results = await Promise.all(
-        CLASS_IDS.map(async (classId) => {
-          const res = await fetch(`/api/exam-status?classId=${classId}`);
-          const data = await res.json();
-          return { classId, active: data.active ?? false, loading: false };
-        })
-      );
-      setStatuses(results);
+    if (!saved) {
+      router.replace('/teacher/login');
+      return;
     }
+    setPassword(saved);
     loadStatuses();
   }, []);
 
-  async function toggle(classId: number, newActive: boolean) {
-    if (!passwordSaved) return;
+  async function loadStatuses() {
+    const results = await Promise.all(
+      CLASS_IDS.map(async (classId) => {
+        const res = await fetch(`/api/exam-status?classId=${classId}`);
+        const data = await res.json();
+        return { classId, active: data.active ?? false, loading: false };
+      })
+    );
+    setStatuses(results);
+  }
 
+  async function toggle(classId: number, newActive: boolean) {
     setStatuses((prev) =>
       prev.map((s) => (s.classId === classId ? { ...s, loading: true } : s))
     );
@@ -62,31 +63,24 @@ export default function TeacherDashboardPage() {
     );
   }
 
+  function logout() {
+    sessionStorage.removeItem('teacherPassword');
+    router.push('/teacher/login');
+  }
+
   return (
     <PageContainer>
       <div className="mx-auto max-w-5xl space-y-6">
 
-        <Card>
+        <div className="flex items-center justify-between">
           <Title>Панель вчителя</Title>
-          <p className="mt-2 text-slate-600">
-            Введіть пароль щоб керувати доступом учнів до робіт.
-          </p>
-          <div className="mt-4 flex gap-3">
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => { setPassword(e.target.value); setPasswordSaved(false); }}
-              placeholder="Пароль вчителя"
-              className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-700"
-            />
-            <button
-              onClick={() => { setPasswordSaved(true); sessionStorage.setItem('teacherPassword', password); }}
-              className="rounded-2xl bg-slate-900 px-5 py-3 text-white hover:bg-slate-700 whitespace-nowrap"
-            >
-              {passwordSaved ? 'Збережено ✓' : 'Підтвердити'}
-            </button>
-          </div>
-        </Card>
+          <button
+            onClick={logout}
+            className="rounded-2xl border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+          >
+            Вийти
+          </button>
+        </div>
 
         <div className="grid gap-4 md:grid-cols-3">
           {statuses.map(({ classId, active, loading }) => (
@@ -105,7 +99,7 @@ export default function TeacherDashboardPage() {
               <div className="mt-4 flex flex-col gap-2">
                 <button
                   onClick={() => toggle(classId, !active)}
-                  disabled={loading || !passwordSaved}
+                  disabled={loading}
                   className={`w-full rounded-2xl py-3 text-sm font-semibold transition disabled:opacity-50 ${
                     active
                       ? 'bg-red-500 text-white hover:bg-red-600'
