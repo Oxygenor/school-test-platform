@@ -20,6 +20,11 @@ export default function TeacherDashboardPage() {
   const [passwordSaved, setPasswordSaved] = useState(false);
 
   useEffect(() => {
+    const saved = sessionStorage.getItem('teacherPassword');
+    if (saved) { setPassword(saved); setPasswordSaved(true); }
+  }, []);
+
+  useEffect(() => {
     async function loadStatuses() {
       const results = await Promise.all(
         CLASS_IDS.map(async (classId) => {
@@ -75,7 +80,7 @@ export default function TeacherDashboardPage() {
               className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-700"
             />
             <button
-              onClick={() => setPasswordSaved(true)}
+              onClick={() => { setPasswordSaved(true); sessionStorage.setItem('teacherPassword', password); }}
               className="rounded-2xl bg-slate-900 px-5 py-3 text-white hover:bg-slate-700 whitespace-nowrap"
             >
               {passwordSaved ? 'Збережено ✓' : 'Підтвердити'}

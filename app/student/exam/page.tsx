@@ -22,6 +22,9 @@ function ExamContent() {
   const [unlockError, setUnlockError] = useState('');
   const [secondsBlocked, setSecondsBlocked] = useState(0);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  const [examEnded, setExamEnded] = useState(false);
+  const [finishConfirm, setFinishConfirm] = useState(false);
+  const [finishing, setFinishing] = useState(false);
 
   const noSleepRef = useRef<any>(null);
   const focusLostCountRef = useRef(0);
@@ -102,6 +105,31 @@ function ExamContent() {
     return () => clearInterval(timer);
   }, [session]);
 
+  // Polling: якщо заблоковано — перевіряємо чи вчитель розблокував
+  useEffect(() => {
+    if (!sessionId || !session || session.status !== 'blocked') return;
+    const interval = setInterval(async () => {
+      const res = await fetch(`/api/get-session?sessionId=${sessionId}`);
+      const data = await res.json();
+      if (data.ok && data.session.status !== 'blocked') {
+        setSession(data.session);
+        setSecondsBlocked(0);
+      }
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [sessionId, session?.status]);
+
+  // Polling: вчитель завершив роботу для всіх
+  useEffect(() => {
+    if (!session || session.status !== 'writing') return;
+    const interval = setInterval(async () => {
+      const res = await fetch(`/api/exam-status?classId=${session.class_id}`);
+      const data = await res.json();
+      if (data.ok && !data.active) setExamEnded(true);
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [session?.status, session?.class_id]);
+
   // Таймер роботи
   const work = useMemo(() => {
     if (!session) return null;
@@ -117,7 +145,11 @@ function ExamContent() {
   useEffect(() => {
     if (!session || !work) return;
     const endTime = new Date(session.started_at).getTime() + work.durationMinutes * 60 * 1000;
-    const update = () => setTimeLeft(Math.max(0, Math.floor((endTime - Date.now()) / 1000)));
+    const update = () => {
+      const left = Math.max(0, Math.floor((endTime - Date.now()) / 1000));
+      setTimeLeft(left);
+      if (left === 0) setExamEnded(true);
+    };
     update();
     const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
@@ -150,15 +182,12 @@ function ExamContent() {
 
     function onHide() {
       if (!document.hidden) return;
-
       exitStartRef.current = Date.now();
       focusLostCountRef.current += 1;
-
       if (focusLostCountRef.current > 3) {
         sendBlock('Перевищено кількість виходів зі сторінки');
         return;
       }
-
       exitTimerRef.current = setTimeout(() => {
         sendBlock('Учень був відсутній більше 7 секунд');
       }, 7000);
@@ -167,19 +196,13 @@ function ExamContent() {
     function onShow() {
       if (document.hidden) return;
       clearTimeout(exitTimerRef.current);
-
       if (exitStartRef.current) {
         const durationSeconds = Math.floor((Date.now() - exitStartRef.current) / 1000);
         exitStartRef.current = null;
-
         fetch('/api/log-exit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sessionId,
-            durationSeconds,
-            exitCount: focusLostCountRef.current,
-          }),
+          body: JSON.stringify({ sessionId, durationSeconds, exitCount: focusLostCountRef.current }),
         });
       }
     }
@@ -198,24 +221,31 @@ function ExamContent() {
 
   async function unlock() {
     if (!sessionId) return;
-
     const response = await fetch('/api/unlock-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId, unlockPassword }),
     });
-
     const data = await response.json();
-
     if (!data.ok) {
       setUnlockError(data.error || 'Не вдалося розблокувати');
       return;
     }
-
     setUnlockPassword('');
     setUnlockError('');
     setSecondsBlocked(0);
     setSession(data.session);
+  }
+
+  async function finishWork() {
+    if (!sessionId || finishing) return;
+    setFinishing(true);
+    await fetch('/api/finish-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId }),
+    });
+    router.push('/');
   }
 
   if (loading) {
@@ -234,9 +264,7 @@ function ExamContent() {
     );
   }
 
-  const timerColor = timeLeft !== null && timeLeft < 300
-    ? 'text-red-600'
-    : 'text-slate-700';
+  const timerColor = timeLeft !== null && timeLeft < 300 ? 'text-red-600' : 'text-slate-700';
 
   return (
     <div className="min-h-screen bg-slate-50 p-3 md:p-8">
@@ -275,7 +303,7 @@ function ExamContent() {
         <div className="mt-4 space-y-4 md:mt-8 md:space-y-5">
           {work.tasks.map((task, index) => (
             <div
-              key={task}
+              key={index}
               className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:rounded-3xl md:p-6"
             >
               <div className="space-y-3 md:space-y-4">
@@ -297,6 +325,16 @@ function ExamContent() {
           ))}
         </div>
 
+        {/* Кнопка завершення */}
+        <div className="mt-8 text-center">
+          <button
+            onClick={() => setFinishConfirm(true)}
+            className="rounded-2xl border-2 border-slate-300 px-6 py-3 text-sm font-semibold text-slate-600 hover:border-slate-500 hover:text-slate-900"
+          >
+            Завершити роботу
+          </button>
+        </div>
+
         <div className="mt-20" />
       </div>
 
@@ -309,6 +347,46 @@ function ExamContent() {
       >
         🧮
       </button>
+
+      {/* Підтвердження завершення */}
+      {finishConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl text-center">
+            <div className="text-xl font-bold">Завершити роботу?</div>
+            <p className="mt-2 text-sm text-slate-600">
+              Після завершення повернутись до роботи буде неможливо.
+            </p>
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => setFinishConfirm(false)}
+                className="flex-1 rounded-2xl border border-slate-300 py-3 text-slate-700"
+              >
+                Скасувати
+              </button>
+              <button
+                onClick={finishWork}
+                disabled={finishing}
+                className="flex-1 rounded-2xl bg-slate-900 py-3 text-white font-semibold disabled:opacity-50"
+              >
+                {finishing ? 'Завершення...' : 'Так, здати'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Вчитель завершив роботу для всіх */}
+      {examEnded && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-8 shadow-2xl text-center">
+            <div className="text-4xl mb-4">✋</div>
+            <div className="text-2xl font-bold md:text-3xl">Роботу завершено</div>
+            <p className="mt-4 text-lg text-slate-600">
+              Здаємо листочки вчителю.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Блокування */}
       {session.status === 'blocked' && (
@@ -325,6 +403,9 @@ function ExamContent() {
               <div className="mt-2 text-5xl font-bold md:text-6xl">
                 {formatSeconds(secondsBlocked)}
               </div>
+              <p className="mt-4 text-sm text-slate-500">
+                Зверніться до вчителя для розблокування.
+              </p>
             </div>
             <div className="mx-auto mt-6 max-w-md md:mt-8">
               <label className="mb-2 block text-sm font-medium">Пароль розблокування</label>

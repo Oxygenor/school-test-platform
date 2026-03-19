@@ -45,6 +45,11 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
   const [password, setPassword] = useState('');
   const [passwordSaved, setPasswordSaved] = useState(false);
 
+  useEffect(() => {
+    const saved = sessionStorage.getItem('teacherPassword');
+    if (saved) { setPassword(saved); setPasswordSaved(true); }
+  }, []);
+
   const [editingVariant, setEditingVariant] = useState<1 | 2 | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
   const [saving, setSaving] = useState(false);
@@ -172,25 +177,15 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
           </Link>
         </div>
 
-        {/* Пароль */}
-        <Card>
-          <p className="mb-3 text-sm text-slate-600">Введіть пароль вчителя щоб редагувати роботи.</p>
-          <div className="flex gap-3">
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => { setPassword(e.target.value); setPasswordSaved(false); }}
-              placeholder="Пароль вчителя"
-              className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-700"
-            />
-            <button
-              onClick={() => setPasswordSaved(true)}
-              className="rounded-2xl bg-slate-900 px-5 py-3 text-white hover:bg-slate-700 whitespace-nowrap"
-            >
-              {passwordSaved ? 'Збережено ✓' : 'Підтвердити'}
-            </button>
-          </div>
-        </Card>
+        {!passwordSaved && (
+          <Card>
+            <p className="text-sm text-amber-700 bg-amber-50 rounded-xl p-3">
+              Пароль не введено. Поверніться до{' '}
+              <Link href="/teacher/dashboard" className="underline font-medium">кабінету вчителя</Link>{' '}
+              та підтвердіть пароль.
+            </p>
+          </Card>
+        )}
 
         {/* Варіанти */}
         {loading ? (

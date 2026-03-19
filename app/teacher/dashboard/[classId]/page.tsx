@@ -1,52 +1,65 @@
+'use client';
+
+import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
-import { supabaseAdmin } from '@/lib/supabase';
 import { Card, PageContainer, Title } from '@/components/ui';
 import { formatDateTime } from '@/lib/utils';
 
-export default async function TeacherClassPage({
+interface StudentSession {
+  id: string;
+  full_name: string;
+  variant: number;
+  status: string;
+  started_at: string;
+  blocked_at: string | null;
+  block_reason: string | null;
+}
+
+export default function TeacherClassPage({
   params,
 }: {
   params: Promise<{ classId: string }>;
 }) {
-  const { classId } = await params;
+  const { classId } = use(params);
   const numericClassId = Number(classId);
 
-  if (![6, 7, 10].includes(numericClassId)) {
-    notFound();
+  const [students, setStudents] = useState<StudentSession[]>([]);
+  const [exitCountMap, setExitCountMap] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(true);
+  const [unlocking, setUnlocking] = useState<string | null>(null);
+
+  async function fetchStudents() {
+    const res = await fetch(`/api/class-students?classId=${numericClassId}`);
+    const data = await res.json();
+    if (data.ok) {
+      setStudents(data.students);
+      setExitCountMap(data.exitCountMap);
+    }
+    setLoading(false);
   }
 
-  const { data: students, error } = await supabaseAdmin
-    .from('student_sessions')
-    .select('*')
-    .eq('class_id', numericClassId)
-    .order('started_at', { ascending: false });
+  useEffect(() => {
+    fetchStudents();
+    const interval = setInterval(fetchStudents, 10000);
+    return () => clearInterval(interval);
+  }, [classId]);
 
-  if (error) {
-    return (
-      <PageContainer>
-        <div className="mx-auto max-w-5xl text-red-600">Не вдалося завантажити список учнів.</div>
-      </PageContainer>
-    );
+  async function unlockStudent(sessionId: string) {
+    const password = sessionStorage.getItem('teacherPassword');
+    if (!password) return;
+    setUnlocking(sessionId);
+    await fetch('/api/unlock-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId, unlockPassword: password }),
+    });
+    setUnlocking(null);
+    fetchStudents();
   }
 
-  const sessionIds = (students || []).map((s) => s.id);
-
-  const { data: exitEvents } = sessionIds.length
-    ? await supabaseAdmin
-        .from('session_events')
-        .select('session_id')
-        .eq('event_type', 'exit')
-        .in('session_id', sessionIds)
-    : { data: [] };
-
-  const exitCountMap: Record<string, number> = {};
-  for (const event of exitEvents || []) {
-    exitCountMap[event.session_id] = (exitCountMap[event.session_id] || 0) + 1;
-  }
-
-  const writingCount = (students || []).filter((s) => s.status === 'writing').length;
-  const blockedCount = (students || []).filter((s) => s.status === 'blocked').length;
+  const writingCount = students.filter((s) => s.status === 'writing').length;
+  const blockedCount = students.filter((s) => s.status === 'blocked').length;
+  const finishedCount = students.filter((s) => s.status === 'finished').length;
 
   return (
     <PageContainer>
@@ -56,68 +69,102 @@ export default async function TeacherClassPage({
             <Title>{numericClassId} клас</Title>
             <p className="mt-2 text-slate-600">Список учнів, які почали роботу.</p>
           </div>
-          <Link href="/teacher/dashboard" className="rounded-2xl bg-slate-200 px-4 py-3 text-slate-900">
-            Назад
-          </Link>
+          <div className="flex gap-2">
+            <Link
+              href={`/teacher/dashboard/${classId}/works`}
+              className="rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50"
+            >
+              Роботи
+            </Link>
+            <Link href="/teacher/dashboard" className="rounded-2xl bg-slate-200 px-4 py-3 text-sm text-slate-900">
+              Назад
+            </Link>
+          </div>
         </div>
 
-        <div className="mb-6 grid gap-4 md:grid-cols-3">
+        <div className="mb-6 grid gap-4 md:grid-cols-4">
           <Card>
             <div className="text-sm text-slate-500">Усього</div>
-            <div className="mt-2 text-3xl font-bold">{students?.length || 0}</div>
+            <div className="mt-2 text-3xl font-bold">{students.length}</div>
           </Card>
           <Card>
             <div className="text-sm text-slate-500">Пишуть</div>
-            <div className="mt-2 text-3xl font-bold">{writingCount}</div>
+            <div className="mt-2 text-3xl font-bold text-blue-600">{writingCount}</div>
           </Card>
           <Card>
             <div className="text-sm text-slate-500">У блокуванні</div>
-            <div className="mt-2 text-3xl font-bold">{blockedCount}</div>
+            <div className="mt-2 text-3xl font-bold text-red-600">{blockedCount}</div>
+          </Card>
+          <Card>
+            <div className="text-sm text-slate-500">Завершили</div>
+            <div className="mt-2 text-3xl font-bold text-green-600">{finishedCount}</div>
           </Card>
         </div>
 
         <Card>
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left">
-              <thead>
-                <tr className="border-b border-slate-200 text-sm text-slate-500">
-                  <th className="px-3 py-3">ПІБ</th>
-                  <th className="px-3 py-3">Варіант</th>
-                  <th className="px-3 py-3">Статус</th>
-                  <th className="px-3 py-3">Початок</th>
-                  <th className="px-3 py-3">Виходи</th>
-                  <th className="px-3 py-3">Блокування</th>
-                  <th className="px-3 py-3">Причина</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(students || []).map((student) => {
-                  const exits = exitCountMap[student.id] || 0;
-                  return (
-                    <tr key={student.id} className="border-b border-slate-100">
-                      <td className="px-3 py-4 font-medium">{student.full_name}</td>
-                      <td className="px-3 py-4">{student.variant}</td>
-                      <td className="px-3 py-4">
-                        {student.status === 'writing'
-                          ? 'Пише'
-                          : student.status === 'blocked'
-                          ? 'У блокуванні'
-                          : 'Завершив'}
-                      </td>
-                      <td className="px-3 py-4">{formatDateTime(student.started_at)}</td>
-                      <td className="px-3 py-4">
-                        <span className={`font-semibold ${exits > 0 ? 'text-red-600' : 'text-slate-400'}`}>
-                          {exits > 0 ? `${exits} раз` : '—'}
-                        </span>
-                      </td>
-                      <td className="px-3 py-4">{formatDateTime(student.blocked_at)}</td>
-                      <td className="px-3 py-4">{student.block_reason || '—'}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          {loading ? (
+            <div className="py-8 text-center text-slate-500">Завантаження...</div>
+          ) : students.length === 0 ? (
+            <div className="py-8 text-center text-slate-500">Жоден учень ще не розпочав роботу.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-left">
+                <thead>
+                  <tr className="border-b border-slate-200 text-sm text-slate-500">
+                    <th className="px-3 py-3">ПІБ</th>
+                    <th className="px-3 py-3">Варіант</th>
+                    <th className="px-3 py-3">Статус</th>
+                    <th className="px-3 py-3">Початок</th>
+                    <th className="px-3 py-3">Виходи</th>
+                    <th className="px-3 py-3">Причина блокування</th>
+                    <th className="px-3 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {students.map((student) => {
+                    const exits = exitCountMap[student.id] || 0;
+                    return (
+                      <tr key={student.id} className="border-b border-slate-100">
+                        <td className="px-3 py-4 font-medium">{student.full_name}</td>
+                        <td className="px-3 py-4">{student.variant}</td>
+                        <td className="px-3 py-4">
+                          <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                            student.status === 'writing'
+                              ? 'bg-blue-100 text-blue-700'
+                              : student.status === 'blocked'
+                              ? 'bg-red-100 text-red-700'
+                              : 'bg-green-100 text-green-700'
+                          }`}>
+                            {student.status === 'writing' ? 'Пише' : student.status === 'blocked' ? 'Заблоковано' : 'Завершив'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-4 text-sm">{formatDateTime(student.started_at)}</td>
+                        <td className="px-3 py-4">
+                          <span className={`font-semibold ${exits > 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                            {exits > 0 ? `${exits} раз` : '—'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-4 text-sm text-slate-500">
+                          {student.block_reason || '—'}
+                        </td>
+                        <td className="px-3 py-4">
+                          {student.status === 'blocked' && (
+                            <button
+                              onClick={() => unlockStudent(student.id)}
+                              disabled={unlocking === student.id}
+                              className="rounded-xl bg-slate-900 px-3 py-1.5 text-xs text-white disabled:opacity-50"
+                            >
+                              {unlocking === student.id ? '...' : 'Розблокувати'}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Card>
       </div>
     </PageContainer>
