@@ -28,6 +28,8 @@ function ExamContent() {
   const warningVisibleRef = useRef(false);
   const focusLostCountRef = useRef(0);
   const countdownIntervalRef = useRef<any>(null);
+  const cancelWarningRef = useRef<() => void>(() => {});
+  const notificationRef = useRef<Notification | null>(null);
 
 useEffect(() => {
 
@@ -64,6 +66,12 @@ useEffect(() => {
 
 }, []);
 
+
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
 
   useEffect(() => {
     noSleepRef.current = new NoSleep();
@@ -133,6 +141,7 @@ useEffect(() => {
       clearInterval(countdownIntervalRef.current);
       setWarningVisible(false);
       warningVisibleRef.current = false;
+      notificationRef.current?.close();
 
       const blockedAt = new Date().toISOString();
       setSession((prev) =>
@@ -159,6 +168,13 @@ useEffect(() => {
       setWarningVisible(true);
       setWarningCountdown(10);
 
+      if ('Notification' in window && Notification.permission === 'granted') {
+        notificationRef.current = new Notification('⚠️ Поверніться на сторінку тесту!', {
+          body: 'У вас є 10 секунд, інакше роботу буде заблоковано.',
+          requireInteraction: true,
+        });
+      }
+
       let remaining = 10;
       countdownIntervalRef.current = setInterval(() => {
         remaining -= 1;
@@ -170,31 +186,28 @@ useEffect(() => {
       }, 1000);
     }
 
-    function cancelWarning() {
+    cancelWarningRef.current = function cancelWarning() {
       if (!warningVisibleRef.current) return;
       clearInterval(countdownIntervalRef.current);
       warningVisibleRef.current = false;
       setWarningVisible(false);
+      notificationRef.current?.close();
       focusLostCountRef.current += 1;
       setFocusLostCount(focusLostCountRef.current);
-    }
+    };
 
     function onHidden() {
       if (document.hidden) startWarning();
-      else cancelWarning();
     }
 
     function onBlur() { startWarning(); }
-    function onFocus() { cancelWarning(); }
 
     document.addEventListener('visibilitychange', onHidden);
     window.addEventListener('blur', onBlur);
-    window.addEventListener('focus', onFocus);
 
     return () => {
       document.removeEventListener('visibilitychange', onHidden);
       window.removeEventListener('blur', onBlur);
-      window.removeEventListener('focus', onFocus);
       clearInterval(countdownIntervalRef.current);
     };
   }, [sessionId, session]);
@@ -377,6 +390,12 @@ useEffect(() => {
             <p className="mt-4 text-sm text-slate-400">
               Залишилось спроб: {3 - focusLostCount}
             </p>
+            <button
+              onClick={() => cancelWarningRef.current()}
+              className="mt-6 w-full rounded-2xl bg-slate-900 px-5 py-3 text-white hover:bg-slate-700"
+            >
+              Я повернувся, продовжити роботу
+            </button>
           </div>
         </div>
       )}
