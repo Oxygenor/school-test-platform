@@ -212,9 +212,34 @@ function ExamContent() {
       else onShow();
     }
 
+    // Спрацьовує коли системний оверлей (Gemini тощо) забирає фокус
+    function onWindowBlur() {
+      if (document.hidden) return; // вже обробляється visibilitychange
+      onHide();
+    }
+
+    function onWindowFocus() {
+      if (document.hidden) return;
+      onShow();
+    }
+
+    // Резервний polling — кожні 2 сек перевіряємо фокус
+    const focusPoller = setInterval(() => {
+      if (!document.hasFocus() && !document.hidden && exitStartRef.current === null) {
+        onHide();
+      } else if (document.hasFocus() && exitStartRef.current !== null) {
+        onShow();
+      }
+    }, 2000);
+
     document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('blur', onWindowBlur);
+    window.addEventListener('focus', onWindowFocus);
     return () => {
       document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('blur', onWindowBlur);
+      window.removeEventListener('focus', onWindowFocus);
+      clearInterval(focusPoller);
       clearTimeout(exitTimerRef.current);
     };
   }, [sessionId, session]);

@@ -31,7 +31,7 @@ export default function HomePage() {
           </h1>
 
           <p className="mt-5 text-base leading-7 text-slate-400">
-            Учень отримує завдання на екрані і записує відповіді на папері. Списати — неможливо.
+            Учень отримує завдання на екрані і записує відповіді на папері.
           </p>
 
           <button
