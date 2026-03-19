@@ -67,11 +67,6 @@ useEffect(() => {
 }, []);
 
 
-  useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
-  }, []);
 
   useEffect(() => {
     noSleepRef.current = new NoSleep();
