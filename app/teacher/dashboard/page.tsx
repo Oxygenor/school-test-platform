@@ -116,6 +116,12 @@ export default function TeacherDashboardPage() {
                 >
                   Переглянути учнів
                 </Link>
+                <Link
+                  href={`/teacher/dashboard/${classId}/works`}
+                  className="w-full rounded-2xl border border-slate-300 py-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Керувати роботами
+                </Link>
               </div>
             </Card>
           ))}

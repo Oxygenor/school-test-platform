@@ -6,6 +6,7 @@ import { works } from '@/data/works';
 import { StudentSession } from '@/types';
 import { formatSeconds } from '@/lib/utils';
 import Calculator from '@/components/calculator';
+import { MathText } from '@/components/math-text';
 import NoSleep from 'nosleep.js';
 
 function ExamContent() {
@@ -14,6 +15,7 @@ function ExamContent() {
   const sessionId = params.get('sessionId');
 
   const [session, setSession] = useState<StudentSession | null>(null);
+  const [dbWork, setDbWork] = useState<{ work_type: string; title: string; duration_minutes: number; tasks: string[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [calcOpen, setCalcOpen] = useState(false);
   const [unlockPassword, setUnlockPassword] = useState('');
@@ -58,13 +60,23 @@ function ExamContent() {
     return () => noSleepRef.current?.disable();
   }, []);
 
-  // Завантаження сесії
+  // Завантаження сесії та роботи з БД
   useEffect(() => {
     async function loadSession() {
       if (!sessionId) return;
       const response = await fetch(`/api/get-session?sessionId=${sessionId}`);
       const data = await response.json();
-      if (data.ok) setSession(data.session);
+      if (data.ok) {
+        setSession(data.session);
+        const worksRes = await fetch(`/api/works?classId=${data.session.class_id}`);
+        const worksData = await worksRes.json();
+        if (worksData.ok && worksData.works.length > 0) {
+          const found = worksData.works.find(
+            (w: { variant: number }) => w.variant === data.session.variant
+          );
+          if (found) setDbWork(found);
+        }
+      }
       setLoading(false);
     }
     loadSession();
@@ -93,8 +105,14 @@ function ExamContent() {
   // Таймер роботи
   const work = useMemo(() => {
     if (!session) return null;
+    if (dbWork) return {
+      workType: dbWork.work_type,
+      title: dbWork.title,
+      durationMinutes: dbWork.duration_minutes,
+      tasks: dbWork.tasks,
+    };
     return works[session.class_id][session.variant];
-  }, [session]);
+  }, [session, dbWork]);
 
   useEffect(() => {
     if (!session || !work) return;
@@ -266,8 +284,8 @@ function ExamContent() {
                 </div>
                 <div>
                   <div className="w-full rounded-xl bg-slate-50 px-4 py-3 text-slate-900 md:rounded-2xl md:px-5 md:py-4">
-                    <div className="whitespace-pre-line font-serif text-lg leading-8 md:text-[1.45rem] md:leading-10">
-                      {task}
+                    <div className="font-serif text-lg leading-8 md:text-[1.45rem] md:leading-10">
+                      <MathText text={task} />
                     </div>
                   </div>
                   <div className="mt-3 rounded-xl border border-dashed border-slate-300 bg-white p-3 text-xs text-slate-500 md:rounded-2xl md:p-4 md:text-sm">
