@@ -19,16 +19,10 @@ function ExamContent() {
   const [unlockPassword, setUnlockPassword] = useState('');
   const [unlockError, setUnlockError] = useState('');
   const [secondsBlocked, setSecondsBlocked] = useState(0);
+
   const noSleepRef = useRef<any>(null);
-
-  const [focusLostCount, setFocusLostCount] = useState(0);
-  const [warningVisible, setWarningVisible] = useState(false);
-  const [warningCountdown, setWarningCountdown] = useState(10);
-
-  const warningVisibleRef = useRef(false);
   const focusLostCountRef = useRef(0);
-  const countdownIntervalRef = useRef<any>(null);
-  const cancelWarningRef = useRef<() => void>(() => {});
+  const exitTimerRef = useRef<any>(null);
 
   // Заборона перезавантаження
   useEffect(() => {
@@ -109,7 +103,7 @@ function ExamContent() {
     return () => clearInterval(timer);
   }, [session]);
 
-  // Система попереджень і блокування
+  // Система блокування: макс 3 виходи, кожен не довше 7 секунд
   useEffect(() => {
     if (!sessionId || !session || session.status === 'blocked') return;
 
@@ -118,10 +112,7 @@ function ExamContent() {
     async function sendBlock(reason: string) {
       if (alreadyBlocked) return;
       alreadyBlocked = true;
-
-      clearInterval(countdownIntervalRef.current);
-      setWarningVisible(false);
-      warningVisibleRef.current = false;
+      clearTimeout(exitTimerRef.current);
 
       const blockedAt = new Date().toISOString();
       setSession((prev) =>
@@ -137,50 +128,36 @@ function ExamContent() {
       if (data.ok) setSession(data.session);
     }
 
-    function startWarning() {
-      if (warningVisibleRef.current) return;
-      if (focusLostCountRef.current >= 3) {
+    function onHide() {
+      if (!document.hidden) return;
+
+      focusLostCountRef.current += 1;
+
+      if (focusLostCountRef.current > 3) {
         sendBlock('Перевищено кількість виходів зі сторінки');
         return;
       }
 
-      warningVisibleRef.current = true;
-      setWarningVisible(true);
-      setWarningCountdown(10);
-
-      let remaining = 10;
-      countdownIntervalRef.current = setInterval(() => {
-        remaining -= 1;
-        setWarningCountdown(remaining);
-        if (remaining <= 0) {
-          clearInterval(countdownIntervalRef.current);
-          sendBlock('Учень не повернувся на сторінку вчасно');
-        }
-      }, 1000);
+      exitTimerRef.current = setTimeout(() => {
+        sendBlock('Учень був відсутній більше 7 секунд');
+      }, 7000);
     }
 
-    cancelWarningRef.current = function cancelWarning() {
-      if (!warningVisibleRef.current) return;
-      clearInterval(countdownIntervalRef.current);
-      warningVisibleRef.current = false;
-      setWarningVisible(false);
-      focusLostCountRef.current += 1;
-      setFocusLostCount(focusLostCountRef.current);
-    };
-
-    function onHidden() {
-      if (document.hidden) startWarning();
+    function onShow() {
+      if (document.hidden) return;
+      clearTimeout(exitTimerRef.current);
     }
 
-    function onBlur() { startWarning(); }
+    function onVisibilityChange() {
+      if (document.hidden) onHide();
+      else onShow();
+    }
 
-    document.addEventListener('visibilitychange', onHidden);
-    window.addEventListener('blur', onBlur);
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     return () => {
-      document.removeEventListener('visibilitychange', onHidden);
-      window.removeEventListener('blur', onBlur);
-      clearInterval(countdownIntervalRef.current);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      clearTimeout(exitTimerRef.current);
     };
   }, [sessionId, session]);
 
@@ -287,7 +264,6 @@ function ExamContent() {
           ))}
         </div>
 
-        {/* Відступ знизу для кнопки калькулятора */}
         <div className="mt-20" />
       </div>
 
@@ -344,30 +320,6 @@ function ExamContent() {
                 Розблокувати
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Попередження при виході */}
-      {warningVisible && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-2xl md:rounded-[2rem] md:p-8">
-            <div className="text-6xl font-bold text-red-500">{warningCountdown}</div>
-            <h2 className="mt-4 text-xl font-bold text-slate-900 md:text-2xl">
-              Ви покинули сторінку тесту
-            </h2>
-            <p className="mt-3 text-sm text-slate-600 md:text-base">
-              Поверніться протягом <strong>{warningCountdown} сек</strong>, інакше роботу буде заблоковано.
-            </p>
-            <p className="mt-3 text-sm text-slate-400">
-              Залишилось спроб: {3 - focusLostCount}
-            </p>
-            <button
-              onClick={() => cancelWarningRef.current()}
-              className="mt-5 w-full rounded-2xl bg-slate-900 px-5 py-3 text-base font-medium text-white"
-            >
-              Я повернувся, продовжити роботу
-            </button>
           </div>
         </div>
       )}
