@@ -49,20 +49,6 @@ function ExamContent() {
     };
   }, []);
 
-  // Повноекранний режим (Android Chrome)
-  useEffect(() => {
-    const el = document.documentElement as any;
-    if (el.requestFullscreen) {
-      el.requestFullscreen().catch(() => {});
-    } else if (el.webkitRequestFullscreen) {
-      el.webkitRequestFullscreen();
-    }
-    return () => {
-      if (document.fullscreenElement) {
-        document.exitFullscreen().catch(() => {});
-      }
-    };
-  }, []);
 
   // Не гасити екран
   useEffect(() => {
