@@ -30,8 +30,23 @@ export default async function TeacherClassPage({
     );
   }
 
-  const writingCount = (students || []).filter((item) => item.status === 'writing').length;
-  const blockedCount = (students || []).filter((item) => item.status === 'blocked').length;
+  const sessionIds = (students || []).map((s) => s.id);
+
+  const { data: exitEvents } = sessionIds.length
+    ? await supabaseAdmin
+        .from('session_events')
+        .select('session_id')
+        .eq('event_type', 'exit')
+        .in('session_id', sessionIds)
+    : { data: [] };
+
+  const exitCountMap: Record<string, number> = {};
+  for (const event of exitEvents || []) {
+    exitCountMap[event.session_id] = (exitCountMap[event.session_id] || 0) + 1;
+  }
+
+  const writingCount = (students || []).filter((s) => s.status === 'writing').length;
+  const blockedCount = (students || []).filter((s) => s.status === 'blocked').length;
 
   return (
     <PageContainer>
@@ -47,9 +62,18 @@ export default async function TeacherClassPage({
         </div>
 
         <div className="mb-6 grid gap-4 md:grid-cols-3">
-          <Card><div className="text-sm text-slate-500">Усього</div><div className="mt-2 text-3xl font-bold">{students?.length || 0}</div></Card>
-          <Card><div className="text-sm text-slate-500">Пишуть</div><div className="mt-2 text-3xl font-bold">{writingCount}</div></Card>
-          <Card><div className="text-sm text-slate-500">У блокуванні</div><div className="mt-2 text-3xl font-bold">{blockedCount}</div></Card>
+          <Card>
+            <div className="text-sm text-slate-500">Усього</div>
+            <div className="mt-2 text-3xl font-bold">{students?.length || 0}</div>
+          </Card>
+          <Card>
+            <div className="text-sm text-slate-500">Пишуть</div>
+            <div className="mt-2 text-3xl font-bold">{writingCount}</div>
+          </Card>
+          <Card>
+            <div className="text-sm text-slate-500">У блокуванні</div>
+            <div className="mt-2 text-3xl font-bold">{blockedCount}</div>
+          </Card>
         </div>
 
         <Card>
@@ -61,28 +85,41 @@ export default async function TeacherClassPage({
                   <th className="px-3 py-3">Варіант</th>
                   <th className="px-3 py-3">Статус</th>
                   <th className="px-3 py-3">Початок</th>
+                  <th className="px-3 py-3">Виходи</th>
                   <th className="px-3 py-3">Блокування</th>
                   <th className="px-3 py-3">Причина</th>
                 </tr>
               </thead>
               <tbody>
-                {(students || []).map((student) => (
-                  <tr key={student.id} className="border-b border-slate-100">
-                    <td className="px-3 py-4 font-medium">{student.full_name}</td>
-                    <td className="px-3 py-4">{student.variant}</td>
-                    <td className="px-3 py-4">
-                      {student.status === 'writing' ? 'Пише' : student.status === 'blocked' ? 'У блокуванні' : 'Завершив'}
-                    </td>
-                    <td className="px-3 py-4">{formatDateTime(student.started_at)}</td>
-                    <td className="px-3 py-4">{formatDateTime(student.blocked_at)}</td>
-                    <td className="px-3 py-4">{student.block_reason || '—'}</td>
-                  </tr>
-                ))}
+                {(students || []).map((student) => {
+                  const exits = exitCountMap[student.id] || 0;
+                  return (
+                    <tr key={student.id} className="border-b border-slate-100">
+                      <td className="px-3 py-4 font-medium">{student.full_name}</td>
+                      <td className="px-3 py-4">{student.variant}</td>
+                      <td className="px-3 py-4">
+                        {student.status === 'writing'
+                          ? 'Пише'
+                          : student.status === 'blocked'
+                          ? 'У блокуванні'
+                          : 'Завершив'}
+                      </td>
+                      <td className="px-3 py-4">{formatDateTime(student.started_at)}</td>
+                      <td className="px-3 py-4">
+                        <span className={`font-semibold ${exits > 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                          {exits > 0 ? `${exits} раз` : '—'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-4">{formatDateTime(student.blocked_at)}</td>
+                      <td className="px-3 py-4">{student.block_reason || '—'}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </Card>
       </div>
     </PageContainer>
-    );
+  );
 }

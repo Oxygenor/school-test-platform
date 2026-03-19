@@ -19,10 +19,12 @@ function ExamContent() {
   const [unlockPassword, setUnlockPassword] = useState('');
   const [unlockError, setUnlockError] = useState('');
   const [secondsBlocked, setSecondsBlocked] = useState(0);
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
   const noSleepRef = useRef<any>(null);
   const focusLostCountRef = useRef(0);
   const exitTimerRef = useRef<any>(null);
+  const exitStartRef = useRef<number | null>(null);
 
   // Заборона перезавантаження
   useEffect(() => {
@@ -48,7 +50,6 @@ function ExamContent() {
       document.removeEventListener('contextmenu', disableCopy);
     };
   }, []);
-
 
   // Не гасити екран
   useEffect(() => {
@@ -89,6 +90,21 @@ function ExamContent() {
     return () => clearInterval(timer);
   }, [session]);
 
+  // Таймер роботи
+  const work = useMemo(() => {
+    if (!session) return null;
+    return works[session.class_id][session.variant];
+  }, [session]);
+
+  useEffect(() => {
+    if (!session || !work) return;
+    const endTime = new Date(session.started_at).getTime() + work.durationMinutes * 60 * 1000;
+    const update = () => setTimeLeft(Math.max(0, Math.floor((endTime - Date.now()) / 1000)));
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [session, work]);
+
   // Система блокування: макс 3 виходи, кожен не довше 7 секунд
   useEffect(() => {
     if (!sessionId || !session || session.status === 'blocked') return;
@@ -117,6 +133,7 @@ function ExamContent() {
     function onHide() {
       if (!document.hidden) return;
 
+      exitStartRef.current = Date.now();
       focusLostCountRef.current += 1;
 
       if (focusLostCountRef.current > 3) {
@@ -132,6 +149,21 @@ function ExamContent() {
     function onShow() {
       if (document.hidden) return;
       clearTimeout(exitTimerRef.current);
+
+      if (exitStartRef.current) {
+        const durationSeconds = Math.floor((Date.now() - exitStartRef.current) / 1000);
+        exitStartRef.current = null;
+
+        fetch('/api/log-exit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId,
+            durationSeconds,
+            exitCount: focusLostCountRef.current,
+          }),
+        });
+      }
     }
 
     function onVisibilityChange() {
@@ -140,17 +172,11 @@ function ExamContent() {
     }
 
     document.addEventListener('visibilitychange', onVisibilityChange);
-
     return () => {
       document.removeEventListener('visibilitychange', onVisibilityChange);
       clearTimeout(exitTimerRef.current);
     };
   }, [sessionId, session]);
-
-  const work = useMemo(() => {
-    if (!session) return null;
-    return works[session.class_id][session.variant];
-  }, [session]);
 
   async function unlock() {
     if (!sessionId) return;
@@ -177,9 +203,7 @@ function ExamContent() {
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 p-4">
-        <div className="mx-auto max-w-3xl text-center text-slate-600">
-          Завантаження...
-        </div>
+        <div className="mx-auto max-w-3xl text-center text-slate-600">Завантаження...</div>
       </div>
     );
   }
@@ -187,12 +211,14 @@ function ExamContent() {
   if (!session || !work) {
     return (
       <div className="min-h-screen bg-slate-50 p-4">
-        <div className="mx-auto max-w-3xl text-center text-slate-600">
-          Сесію не знайдено.
-        </div>
+        <div className="mx-auto max-w-3xl text-center text-slate-600">Сесію не знайдено.</div>
       </div>
     );
   }
+
+  const timerColor = timeLeft !== null && timeLeft < 300
+    ? 'text-red-600'
+    : 'text-slate-700';
 
   return (
     <div className="min-h-screen bg-slate-50 p-3 md:p-8">
@@ -212,13 +238,18 @@ function ExamContent() {
             </p>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <div className="rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700 md:rounded-2xl md:px-5 md:py-3 md:text-sm">
               Варіант {session.variant}
             </div>
             <div className="rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700 md:rounded-2xl md:px-5 md:py-3 md:text-sm">
               {session.class_id} клас
             </div>
+            {timeLeft !== null && (
+              <div className={`rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-bold md:rounded-2xl md:px-5 md:py-3 md:text-sm ${timerColor}`}>
+                ⏱ {formatSeconds(timeLeft)}
+              </div>
+            )}
           </div>
         </div>
 
@@ -233,14 +264,12 @@ function ExamContent() {
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-base font-bold text-white md:h-12 md:w-12 md:rounded-2xl md:text-lg">
                   {index + 1}
                 </div>
-
                 <div>
                   <div className="w-full rounded-xl bg-slate-50 px-4 py-3 text-slate-900 md:rounded-2xl md:px-5 md:py-4">
                     <div className="whitespace-pre-line font-serif text-lg leading-8 md:text-[1.45rem] md:leading-10">
                       {task}
                     </div>
                   </div>
-
                   <div className="mt-3 rounded-xl border border-dashed border-slate-300 bg-white p-3 text-xs text-slate-500 md:rounded-2xl md:p-4 md:text-sm">
                     Відповідь виконується на паперовому аркуші.
                   </div>
@@ -255,7 +284,6 @@ function ExamContent() {
 
       {/* Калькулятор */}
       {calcOpen && <Calculator onClose={() => setCalcOpen(false)} />}
-
       <button
         onClick={() => setCalcOpen(prev => !prev)}
         className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-white shadow-xl text-2xl"
@@ -273,7 +301,6 @@ function ExamContent() {
               <p className="mt-3 text-sm text-slate-600 md:text-base">
                 Причина: {session.block_reason || 'Зафіксовано порушення'}
               </p>
-
               <div className="mt-6 text-xs uppercase tracking-[0.3em] text-slate-500 md:mt-8">
                 Час у блокуванні
               </div>
@@ -281,12 +308,8 @@ function ExamContent() {
                 {formatSeconds(secondsBlocked)}
               </div>
             </div>
-
             <div className="mx-auto mt-6 max-w-md md:mt-8">
-              <label className="mb-2 block text-sm font-medium">
-                Пароль розблокування
-              </label>
-
+              <label className="mb-2 block text-sm font-medium">Пароль розблокування</label>
               <input
                 type="password"
                 value={unlockPassword}
@@ -294,11 +317,7 @@ function ExamContent() {
                 placeholder="Введіть пароль вчителя"
                 className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-700"
               />
-
-              {unlockError && (
-                <p className="mt-2 text-sm text-red-600">{unlockError}</p>
-              )}
-
+              {unlockError && <p className="mt-2 text-sm text-red-600">{unlockError}</p>}
               <button
                 onClick={unlock}
                 className="mt-4 w-full rounded-2xl bg-slate-900 px-5 py-3 text-white"
@@ -318,9 +337,7 @@ export default function StudentExamPage() {
     <Suspense
       fallback={
         <div className="min-h-screen bg-slate-50 p-4">
-          <div className="mx-auto max-w-3xl text-center text-slate-600">
-            Завантаження...
-          </div>
+          <div className="mx-auto max-w-3xl text-center text-slate-600">Завантаження...</div>
         </div>
       }
     >

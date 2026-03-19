@@ -21,5 +21,6 @@ export interface WorkItem {
   variant: Variant;
   title: string;
   workType: string;
+  durationMinutes: number;
   tasks: string[];
 }

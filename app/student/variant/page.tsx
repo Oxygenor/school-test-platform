@@ -1,13 +1,26 @@
 'use client';
 
-import { Suspense } from 'react';
-import { useEffect } from 'react';
+import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Button, Card, PageContainer, Title } from '@/components/ui';
+import { Card, PageContainer, Title } from '@/components/ui';
 import { StudentSessionGuard } from '@/components/student-session-guard';
 
 function VariantContent() {
   const router = useRouter();
+  const params = useSearchParams();
+
+  const classId = params.get('classId');
+  const fullName = params.get('fullName');
+  const studentId = params.get('studentId');
+
+  const [examActive, setExamActive] = useState<boolean | null>(null);
+
+  const checkStatus = useCallback(async () => {
+    if (!classId) return;
+    const res = await fetch(`/api/exam-status?classId=${classId}`);
+    const data = await res.json();
+    setExamActive(data.active ?? false);
+  }, [classId]);
 
   useEffect(() => {
     async function checkExistingSession() {
@@ -29,13 +42,21 @@ function VariantContent() {
     checkExistingSession();
   }, [router]);
 
-  const params = useSearchParams();
-
-  const classId = params.get('classId');
-  const fullName = params.get('fullName');
-  const studentId = params.get('studentId');
+  // Перевірка статусу + автооновлення кожні 5 секунд
+  useEffect(() => {
+    checkStatus();
+    const interval = setInterval(checkStatus, 5000);
+    return () => clearInterval(interval);
+  }, [checkStatus]);
 
   async function chooseVariant(variant: 1 | 2) {
+    const el = document.documentElement as any;
+    if (el.requestFullscreen) {
+      el.requestFullscreen().catch(() => {});
+    } else if (el.webkitRequestFullscreen) {
+      el.webkitRequestFullscreen();
+    }
+
     const response = await fetch('/api/start-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -55,6 +76,36 @@ function VariantContent() {
     localStorage.setItem('studentClassId', String(classId ?? ''));
 
     router.push(`/student/exam?sessionId=${data.session.id}`);
+  }
+
+  // Очікування поки вчитель не дозволить
+  if (examActive === false) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 px-6 text-white">
+        <div className="w-full max-w-sm text-center">
+          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-slate-800 text-4xl">
+            ⏳
+          </div>
+          <h1 className="text-2xl font-bold">Очікуйте на дозвіл</h1>
+          <p className="mt-4 text-slate-400">
+            Вчитель ще не розпочав роботу для {classId} класу.
+            <br />
+            Сторінка оновлюється автоматично.
+          </p>
+          <div className="mt-8 text-sm text-slate-600">
+            {fullName}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (examActive === null) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950">
+        <div className="text-slate-400">Завантаження...</div>
+      </div>
+    );
   }
 
   return (
@@ -92,18 +143,17 @@ function VariantContent() {
 
 export default function StudentVariantPage() {
   return (
-    <><StudentSessionGuard />
-    <Suspense
-      fallback={
-        <PageContainer>
-          <div className="mx-auto max-w-3xl text-center text-slate-600">
-            Завантаження...
+    <>
+      <StudentSessionGuard />
+      <Suspense
+        fallback={
+          <div className="flex min-h-screen items-center justify-center bg-slate-950">
+            <div className="text-slate-400">Завантаження...</div>
           </div>
-        </PageContainer>
-      }
-    >
-      <VariantContent />
-    </Suspense>
+        }
+      >
+        <VariantContent />
+      </Suspense>
     </>
   );
 }
