@@ -9,16 +9,16 @@ export async function GET(req: Request) {
   }
 
   const { data, error } = await supabaseAdmin
-    .from('classes')
-    .select('id')
+    .from('teacher_classes')
+    .select('class_id')
     .eq('teacher_id', teacher.id)
-    .order('id');
+    .order('class_id');
 
   if (error) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, classes: data.map((c) => c.id) });
+  return NextResponse.json({ ok: true, classes: data.map((c) => c.class_id) });
 }
 
 export async function POST(req: Request) {
@@ -33,32 +33,39 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: 'Введіть номер від 1 до 12' }, { status: 400 });
   }
 
-  // Перевіряємо чи клас вже існує
+  // Перевіряємо чи вчитель вже має цей клас
   const { data: existing } = await supabaseAdmin
-    .from('classes')
-    .select('id, teacher_id, teachers(name)')
-    .eq('id', id)
+    .from('teacher_classes')
+    .select('class_id')
+    .eq('teacher_id', teacher.id)
+    .eq('class_id', id)
     .maybeSingle();
 
   if (existing) {
-    if (existing.teacher_id === teacher.id) {
-      return NextResponse.json({ ok: false, error: 'Цей клас вже є у вас' }, { status: 409 });
-    }
-    const ownerName = (existing.teachers as any)?.name ?? 'іншого вчителя';
-    return NextResponse.json({ ok: false, error: `Клас ${id} вже використовує ${ownerName}` }, { status: 409 });
+    return NextResponse.json({ ok: false, error: 'Цей клас вже є у вас' }, { status: 409 });
   }
 
-  const { error: classError } = await supabaseAdmin
-    .from('classes')
-    .insert({ id, teacher_id: teacher.id });
-
-  if (classError) {
-    return NextResponse.json({ ok: false, error: 'Не вдалося створити клас' }, { status: 500 });
-  }
-
+  // Переконуємось що клас існує в таблиці classes
   await supabaseAdmin
-    .from('class_settings')
-    .upsert({ class_id: id, exam_active: false }, { onConflict: 'class_id' });
+    .from('classes')
+    .upsert({ id }, { onConflict: 'id', ignoreDuplicates: true });
+
+  // Додаємо зв'язок вчитель-клас
+  const { error } = await supabaseAdmin
+    .from('teacher_classes')
+    .insert({ teacher_id: teacher.id, class_id: id });
+
+  if (error) {
+    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  }
+
+  // Створюємо статус іспиту для цього вчителя і класу
+  await supabaseAdmin
+    .from('teacher_exam_status')
+    .upsert(
+      { teacher_id: teacher.id, class_id: id, exam_active: false },
+      { onConflict: 'teacher_id,class_id' }
+    );
 
   return NextResponse.json({ ok: true });
 }
@@ -72,19 +79,18 @@ export async function DELETE(req: Request) {
   const { classId } = await req.json();
   const id = Number(classId);
 
-  // Перевіряємо що цей вчитель є власником класу
-  const { data: cls } = await supabaseAdmin
-    .from('classes')
-    .select('teacher_id')
-    .eq('id', id)
-    .single();
+  // Видаляємо лише зв'язок цього вчителя з класом
+  await supabaseAdmin
+    .from('teacher_classes')
+    .delete()
+    .eq('teacher_id', teacher.id)
+    .eq('class_id', id);
 
-  if (!cls || cls.teacher_id !== teacher.id) {
-    return NextResponse.json({ ok: false, error: 'Немає доступу' }, { status: 403 });
-  }
-
-  await supabaseAdmin.from('classes').delete().eq('id', id);
-  await supabaseAdmin.from('class_settings').delete().eq('class_id', id);
+  await supabaseAdmin
+    .from('teacher_exam_status')
+    .delete()
+    .eq('teacher_id', teacher.id)
+    .eq('class_id', id);
 
   return NextResponse.json({ ok: true });
 }

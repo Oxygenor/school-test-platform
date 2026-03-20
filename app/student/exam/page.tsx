@@ -118,11 +118,17 @@ function ExamContent() {
       const data = await response.json();
       if (data.ok) {
         setSession(data.session);
-        const worksRes = await fetch(`/api/works?classId=${data.session.class_id}`);
+        const worksRes = await fetch(`/api/works?classId=${data.session.class_id}`, {
+          headers: data.session.teacher_id
+            ? { 'x-teacher-id-filter': data.session.teacher_id }
+            : {},
+        });
         const worksData = await worksRes.json();
         if (worksData.ok && worksData.works.length > 0) {
           const found = worksData.works.find(
-            (w: { variant: number }) => w.variant === data.session.variant
+            (w: { variant: number; subject?: string }) =>
+              w.variant === data.session.variant &&
+              (!data.session.subject || w.subject === data.session.subject)
           );
           if (found) setDbWork(found);
         }

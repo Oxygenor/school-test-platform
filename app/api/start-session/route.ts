@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 
 export async function POST(req: Request) {
   try {
-    const { classId, studentId, fullName, variant, subject } = await req.json();
+    const { classId, studentId, fullName, variant, subject, teacherId } = await req.json();
 
     if (![1, 2].includes(Number(variant))) {
       return NextResponse.json({ ok: false, error: 'Некоректний варіант' }, { status: 400 });
@@ -13,7 +13,24 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: 'Не вказано учня' }, { status: 400 });
     }
 
-    const { data: existing, error: existingError } = await supabaseAdmin
+    // Знаходимо активний іспит для цього класу + вчителя
+    let resolvedTeacherId = teacherId || null;
+
+    if (!resolvedTeacherId) {
+      // Автоматично знаходимо вчителя з активним іспитом
+      const { data: activeExams } = await supabaseAdmin
+        .from('teacher_exam_status')
+        .select('teacher_id')
+        .eq('class_id', Number(classId))
+        .eq('exam_active', true)
+        .limit(1);
+
+      if (activeExams && activeExams.length > 0) {
+        resolvedTeacherId = activeExams[0].teacher_id;
+      }
+    }
+
+    const { data: existing } = await supabaseAdmin
       .from('student_sessions')
       .select('*')
       .eq('student_id', studentId)
@@ -21,10 +38,6 @@ export async function POST(req: Request) {
       .order('started_at', { ascending: false })
       .limit(1)
       .maybeSingle();
-
-    if (existingError) {
-      return NextResponse.json({ ok: false, error: existingError.message }, { status: 500 });
-    }
 
     if (existing) {
       return NextResponse.json({ ok: true, session: existing });
@@ -40,6 +53,7 @@ export async function POST(req: Request) {
         subject: subject ? String(subject).trim() : null,
         work_type: 'Самостійна робота',
         status: 'writing',
+        teacher_id: resolvedTeacherId,
       })
       .select('*')
       .single();
@@ -51,7 +65,7 @@ export async function POST(req: Request) {
     await supabaseAdmin.from('session_events').insert({
       session_id: data.id,
       event_type: 'started',
-      event_payload: { classId, variant, fullName, studentId },
+      event_payload: { classId, variant, fullName, studentId, teacherId: resolvedTeacherId },
     });
 
     return NextResponse.json({ ok: true, session: data });

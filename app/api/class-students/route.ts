@@ -15,21 +15,12 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Перевіряємо що вчитель є власником класу
-  const { data: cls } = await supabaseAdmin
-    .from('classes')
-    .select('teacher_id')
-    .eq('id', classId)
-    .single();
-
-  if (!cls || cls.teacher_id !== teacher.id) {
-    return NextResponse.json({ ok: false, error: 'Немає доступу' }, { status: 403 });
-  }
-
+  // Повертаємо учнів лише цього вчителя для цього класу
   const { data: students, error } = await supabaseAdmin
     .from('student_sessions')
     .select('*')
     .eq('class_id', classId)
+    .eq('teacher_id', teacher.id)
     .order('started_at', { ascending: true });
 
   if (error) {

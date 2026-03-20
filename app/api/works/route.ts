@@ -2,16 +2,6 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { requireTeacher } from '@/lib/teacher-auth';
 
-// Перевіряємо що вчитель є власником класу
-async function verifyClassOwner(classId: number, teacherId: string): Promise<boolean> {
-  const { data } = await supabaseAdmin
-    .from('classes')
-    .select('teacher_id')
-    .eq('id', classId)
-    .single();
-  return data?.teacher_id === teacherId;
-}
-
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const classId = Number(searchParams.get('classId'));
@@ -20,12 +10,24 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: 'Некоректний клас' }, { status: 400 });
   }
 
-  const { data, error } = await supabaseAdmin
+  const teacher = await requireTeacher(req);
+  // Альтернативний фільтр для сторінки учня (без авторизації)
+  const teacherIdFilter = req.headers.get('x-teacher-id-filter');
+
+  let query = supabaseAdmin
     .from('works')
     .select('*')
     .eq('class_id', classId)
     .order('subject')
     .order('variant');
+
+  if (teacher) {
+    query = query.eq('teacher_id', teacher.id);
+  } else if (teacherIdFilter) {
+    query = query.eq('teacher_id', teacherIdFilter);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
@@ -52,7 +54,16 @@ export async function POST(req: Request) {
   if (!subject?.trim()) {
     return NextResponse.json({ ok: false, error: 'Вкажіть предмет' }, { status: 400 });
   }
-  if (!(await verifyClassOwner(Number(classId), teacher.id))) {
+
+  // Перевіряємо що вчитель має цей клас
+  const { data: cls } = await supabaseAdmin
+    .from('teacher_classes')
+    .select('class_id')
+    .eq('teacher_id', teacher.id)
+    .eq('class_id', Number(classId))
+    .maybeSingle();
+
+  if (!cls) {
     return NextResponse.json({ ok: false, error: 'Немає доступу до цього класу' }, { status: 403 });
   }
 
@@ -71,7 +82,7 @@ export async function POST(req: Request) {
         teacher_id: teacher.id,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: 'class_id,variant,subject' }
+      { onConflict: 'class_id,variant,subject,teacher_id' }
     )
     .select()
     .single();
@@ -94,15 +105,12 @@ export async function DELETE(req: Request) {
   const variant = Number(searchParams.get('variant'));
   const subject = searchParams.get('subject') || '';
 
-  if (!(await verifyClassOwner(classId, teacher.id))) {
-    return NextResponse.json({ ok: false, error: 'Немає доступу' }, { status: 403 });
-  }
-
   const query = supabaseAdmin
     .from('works')
     .delete()
     .eq('class_id', classId)
-    .eq('variant', variant);
+    .eq('variant', variant)
+    .eq('teacher_id', teacher.id);
 
   if (subject) query.eq('subject', subject);
 
