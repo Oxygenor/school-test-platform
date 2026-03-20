@@ -409,6 +409,12 @@ function ExamContent() {
             <p className="mt-4 text-lg text-slate-600">
               Здаємо листочки вчителю.
             </p>
+            <button
+              onClick={() => { localStorage.removeItem('studentSessionId'); router.replace('/'); }}
+              className="mt-6 w-full rounded-2xl bg-slate-900 py-3 text-white font-semibold hover:bg-slate-700"
+            >
+              Вийти
+            </button>
           </div>
         </div>
       )}
