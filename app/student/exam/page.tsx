@@ -25,9 +25,32 @@ function ExamContent() {
   const [examEnded, setExamEnded] = useState(false);
   const [finishConfirm, setFinishConfirm] = useState(false);
   const [finishing, setFinishing] = useState(false);
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [fontSize, setFontSize] = useState<'md' | 'lg' | 'xl'>('md');
 
   const noSleepRef = useRef<any>(null);
   const focusLostCountRef = useRef(0);
+
+  // Завантажуємо налаштування з localStorage
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('examTheme') as 'light' | 'dark' | null;
+    const savedFontSize = localStorage.getItem('examFontSize') as 'md' | 'lg' | 'xl' | null;
+    if (savedTheme) setTheme(savedTheme);
+    if (savedFontSize) setFontSize(savedFontSize);
+  }, []);
+
+  function toggleTheme() {
+    setTheme((prev) => {
+      const next = prev === 'light' ? 'dark' : 'light';
+      localStorage.setItem('examTheme', next);
+      return next;
+    });
+  }
+
+  function changeFontSize(size: 'md' | 'lg' | 'xl') {
+    setFontSize(size);
+    localStorage.setItem('examFontSize', size);
+  }
   const exitTimerRef = useRef<any>(null);
   const exitStartRef = useRef<number | null>(null);
 
@@ -96,9 +119,21 @@ function ExamContent() {
   // Таймер блокування
   useEffect(() => {
     if (!session || session.status !== 'blocked' || !session.blocked_at) return;
+    let autoFinished = false;
     const updateTimer = () => {
       const diff = Math.floor((Date.now() - new Date(session.blocked_at as string).getTime()) / 1000);
       setSecondsBlocked(diff > 0 ? diff : 0);
+      if (diff >= 15 * 60 && !autoFinished) {
+        autoFinished = true;
+        fetch('/api/finish-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId }),
+        }).then(() => {
+          localStorage.removeItem('studentSessionId');
+          setExamEnded(true);
+        });
+      }
     };
     updateTimer();
     const timer = setInterval(updateTimer, 1000);
@@ -145,10 +180,19 @@ function ExamContent() {
   useEffect(() => {
     if (!session || !work) return;
     const endTime = new Date(session.started_at).getTime() + work.durationMinutes * 60 * 1000;
+    let finished = false;
     const update = () => {
       const left = Math.max(0, Math.floor((endTime - Date.now()) / 1000));
       setTimeLeft(left);
-      if (left === 0) setExamEnded(true);
+      if (left === 0 && !finished) {
+        finished = true;
+        setExamEnded(true);
+        fetch('/api/finish-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId }),
+        });
+      }
     };
     update();
     const interval = setInterval(update, 1000);
@@ -289,35 +333,61 @@ function ExamContent() {
     );
   }
 
-  const timerColor = timeLeft !== null && timeLeft < 300 ? 'text-red-600' : 'text-slate-700';
+  const dark = theme === 'dark';
+  const timerColor = timeLeft !== null && timeLeft < 300 ? 'text-red-500' : dark ? 'text-slate-300' : 'text-slate-700';
+
+  const fontSizeClass = fontSize === 'xl' ? 'text-2xl leading-10 md:text-3xl md:leading-[3rem]'
+    : fontSize === 'lg' ? 'text-xl leading-9 md:text-2xl md:leading-[2.6rem]'
+    : 'text-lg leading-8 md:text-[1.45rem] md:leading-10';
 
   return (
-    <div className="min-h-screen bg-slate-50 p-3 md:p-8">
-      <div className="mx-auto max-w-5xl rounded-2xl bg-white p-4 shadow-xl md:rounded-[2rem] md:p-10">
+    <div className={`min-h-screen p-3 md:p-8 transition-colors ${dark ? 'bg-slate-950' : 'bg-slate-50'}`}>
+      <div className={`mx-auto max-w-5xl rounded-2xl p-4 shadow-xl md:rounded-[2rem] md:p-10 transition-colors ${dark ? 'bg-slate-900' : 'bg-white'}`}>
 
         {/* Шапка */}
-        <div className="flex flex-col gap-3 border-b border-slate-200 pb-4 md:flex-row md:items-start md:justify-between md:pb-6">
+        <div className={`flex flex-col gap-3 border-b pb-4 md:flex-row md:items-start md:justify-between md:pb-6 ${dark ? 'border-slate-700' : 'border-slate-200'}`}>
           <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 md:text-sm">
+            <div className={`text-xs font-semibold uppercase tracking-[0.2em] md:text-sm ${dark ? 'text-slate-400' : 'text-slate-500'}`}>
               {work.workType}
             </div>
-            <h1 className="mt-2 text-2xl font-bold text-slate-950 md:mt-3 md:text-4xl">
+            <h1 className={`mt-2 text-2xl font-bold md:mt-3 md:text-4xl ${dark ? 'text-white' : 'text-slate-950'}`}>
               {work.title}
             </h1>
-            <p className="mt-2 text-sm text-slate-600 md:mt-3 md:text-base">
+            <p className={`mt-2 text-sm md:mt-3 md:text-base ${dark ? 'text-slate-400' : 'text-slate-600'}`}>
               Відповіді записуй тільки на паперовому аркуші.
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <div className="rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700 md:rounded-2xl md:px-5 md:py-3 md:text-sm">
+            {/* Розмір шрифту */}
+            {(['md', 'lg', 'xl'] as const).map((s, i) => (
+              <button
+                key={s}
+                onClick={() => changeFontSize(s)}
+                className={`rounded-xl px-3 py-2 text-xs font-bold md:rounded-2xl md:px-4 md:py-3 transition ${
+                  fontSize === s
+                    ? dark ? 'bg-slate-600 text-white' : 'bg-slate-900 text-white'
+                    : dark ? 'border border-slate-600 text-slate-300' : 'border border-slate-300 text-slate-600'
+                }`}
+              >
+                {['A', 'A+', 'A++'][i]}
+              </button>
+            ))}
+            {/* Тема */}
+            <button
+              onClick={toggleTheme}
+              className={`rounded-xl px-3 py-2 text-xs font-bold md:rounded-2xl md:px-4 md:py-3 border transition ${dark ? 'border-slate-600 text-slate-300' : 'border-slate-300 text-slate-600'}`}
+            >
+              {dark ? '☀️' : '🌙'}
+            </button>
+            <div className={`rounded-xl border px-3 py-2 text-xs font-medium md:rounded-2xl md:px-5 md:py-3 md:text-sm ${dark ? 'border-slate-600 bg-slate-800 text-slate-300' : 'border-slate-300 bg-slate-50 text-slate-700'}`}>
               Варіант {session.variant}
             </div>
-            <div className="rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700 md:rounded-2xl md:px-5 md:py-3 md:text-sm">
+            <div className={`rounded-xl border px-3 py-2 text-xs font-medium md:rounded-2xl md:px-5 md:py-3 md:text-sm ${dark ? 'border-slate-600 bg-slate-800 text-slate-300' : 'border-slate-300 bg-slate-50 text-slate-700'}`}>
               {session.class_id} клас
             </div>
             {timeLeft !== null && (
-              <div className={`rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-bold md:rounded-2xl md:px-5 md:py-3 md:text-sm ${timerColor}`}>
+              <div className={`rounded-xl border px-3 py-2 text-xs font-bold md:rounded-2xl md:px-5 md:py-3 md:text-sm ${dark ? 'border-slate-600 bg-slate-800' : 'border-slate-300 bg-slate-50'} ${timerColor}`}>
                 ⏱ {formatSeconds(timeLeft)}
               </div>
             )}
@@ -329,19 +399,19 @@ function ExamContent() {
           {work.tasks.map((task, index) => (
             <div
               key={index}
-              className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:rounded-3xl md:p-6"
+              className={`rounded-2xl border p-4 shadow-sm md:rounded-3xl md:p-6 transition-colors ${dark ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'}`}
             >
               <div className="space-y-3 md:space-y-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-base font-bold text-white md:h-12 md:w-12 md:rounded-2xl md:text-lg">
+                <div className={`flex h-10 w-10 items-center justify-center rounded-xl text-base font-bold text-white md:h-12 md:w-12 md:rounded-2xl md:text-lg ${dark ? 'bg-slate-600' : 'bg-slate-900'}`}>
                   {index + 1}
                 </div>
                 <div>
-                  <div className="w-full rounded-xl bg-slate-50 px-4 py-3 text-slate-900 md:rounded-2xl md:px-5 md:py-4">
-                    <div className="font-serif text-lg leading-8 md:text-[1.45rem] md:leading-10">
+                  <div className={`w-full rounded-xl px-4 py-3 md:rounded-2xl md:px-5 md:py-4 ${dark ? 'bg-slate-700 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
+                    <div className={`font-serif ${fontSizeClass}`}>
                       <MathText text={task} />
                     </div>
                   </div>
-                  <div className="mt-3 rounded-xl border border-dashed border-slate-300 bg-white p-3 text-xs text-slate-500 md:rounded-2xl md:p-4 md:text-sm">
+                  <div className={`mt-3 rounded-xl border border-dashed p-3 text-xs md:rounded-2xl md:p-4 md:text-sm ${dark ? 'border-slate-600 bg-slate-800 text-slate-500' : 'border-slate-300 bg-white text-slate-500'}`}>
                     Відповідь виконується на паперовому аркуші.
                   </div>
                 </div>

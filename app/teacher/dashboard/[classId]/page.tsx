@@ -2,31 +2,75 @@
 
 import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Card, PageContainer, Title } from '@/components/ui';
 import { formatDateTime } from '@/lib/utils';
+
+interface ExitLog {
+  exitedAt: string;
+  durationSeconds: number;
+}
 
 interface StudentSession {
   id: string;
   full_name: string;
   variant: number;
+  subject: string | null;
   status: string;
   started_at: string;
   blocked_at: string | null;
   block_reason: string | null;
 }
 
-export default function TeacherClassPage({
-  params,
-}: {
-  params: Promise<{ classId: string }>;
-}) {
+interface DbWork {
+  variant: number;
+  subject: string;
+  title: string;
+  work_type: string;
+  duration_minutes: number;
+  tasks: string[];
+}
+
+function formatSeconds(s: number) {
+  if (s < 60) return `${s} сек`;
+  return `${Math.floor(s / 60)} хв ${s % 60} сек`;
+}
+
+function minutesSince(dateStr: string) {
+  return Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
+}
+
+export default function TeacherClassPage({ params }: { params: Promise<{ classId: string }> }) {
   const { classId } = use(params);
+  const router = useRouter();
   const numericClassId = Number(classId);
 
   const [students, setStudents] = useState<StudentSession[]>([]);
   const [exitCountMap, setExitCountMap] = useState<Record<string, number>>({});
+  const [exitLogMap, setExitLogMap] = useState<Record<string, ExitLog[]>>({});
   const [loading, setLoading] = useState(true);
   const [unlocking, setUnlocking] = useState<string | null>(null);
+
+  // Журнал виходів
+  const [journalStudent, setJournalStudent] = useState<StudentSession | null>(null);
+
+  // Перегляд завдань
+  const [tasksStudent, setTasksStudent] = useState<StudentSession | null>(null);
+  const [works, setWorks] = useState<DbWork[]>([]);
+
+  useEffect(() => {
+    const saved = sessionStorage.getItem('teacherPassword');
+    if (!saved) { router.replace('/teacher/login'); return; }
+    fetchStudents();
+    const interval = setInterval(fetchStudents, 5000);
+    return () => clearInterval(interval);
+  }, [classId]);
+
+  useEffect(() => {
+    fetch(`/api/works?classId=${numericClassId}`)
+      .then((r) => r.json())
+      .then((d) => { if (d.ok) setWorks(d.works); });
+  }, [classId]);
 
   async function fetchStudents() {
     const res = await fetch(`/api/class-students?classId=${numericClassId}`);
@@ -34,15 +78,10 @@ export default function TeacherClassPage({
     if (data.ok) {
       setStudents(data.students);
       setExitCountMap(data.exitCountMap);
+      setExitLogMap(data.exitLogMap);
     }
     setLoading(false);
   }
-
-  useEffect(() => {
-    fetchStudents();
-    const interval = setInterval(fetchStudents, 10000);
-    return () => clearInterval(interval);
-  }, [classId]);
 
   async function unlockStudent(sessionId: string) {
     const password = sessionStorage.getItem('teacherPassword');
@@ -57,23 +96,41 @@ export default function TeacherClassPage({
     fetchStudents();
   }
 
+  async function finishStudent(sessionId: string) {
+    await fetch('/api/finish-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId }),
+    });
+    fetchStudents();
+  }
+
   const writingCount = students.filter((s) => s.status === 'writing').length;
   const blockedCount = students.filter((s) => s.status === 'blocked').length;
   const finishedCount = students.filter((s) => s.status === 'finished').length;
+  const violationsCount = students.filter((s) => (exitCountMap[s.id] || 0) > 0).length;
+
+  function getStudentWork(s: StudentSession) {
+    return works.find((w) => w.variant === s.variant && w.subject === s.subject) ?? null;
+  }
+
+  function statusLabel(status: string) {
+    if (status === 'writing') return { label: 'Пише', cls: 'bg-blue-100 text-blue-700' };
+    if (status === 'blocked') return { label: 'Заблоковано', cls: 'bg-red-100 text-red-700' };
+    return { label: 'Завершив', cls: 'bg-green-100 text-green-700' };
+  }
 
   return (
     <PageContainer>
       <div className="mx-auto max-w-6xl">
+
         <div className="mb-6 flex items-center justify-between">
           <div>
             <Title>{numericClassId} клас</Title>
-            <p className="mt-2 text-slate-600">Список учнів, які почали роботу.</p>
+            <p className="mt-1 text-sm text-slate-500">Оновлюється кожні 5 сек</p>
           </div>
           <div className="flex gap-2">
-            <Link
-              href={`/teacher/dashboard/${classId}/works`}
-              className="rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50"
-            >
+            <Link href={`/teacher/dashboard/${classId}/works`} className="rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50">
               Роботи
             </Link>
             <Link href="/teacher/dashboard" className="rounded-2xl bg-slate-200 px-4 py-3 text-sm text-slate-900">
@@ -82,7 +139,8 @@ export default function TeacherClassPage({
           </div>
         </div>
 
-        <div className="mb-6 grid gap-4 md:grid-cols-4">
+        {/* Статистика */}
+        <div className="mb-6 grid gap-4 grid-cols-2 md:grid-cols-5">
           <Card>
             <div className="text-sm text-slate-500">Усього</div>
             <div className="mt-2 text-3xl font-bold">{students.length}</div>
@@ -92,15 +150,20 @@ export default function TeacherClassPage({
             <div className="mt-2 text-3xl font-bold text-blue-600">{writingCount}</div>
           </Card>
           <Card>
-            <div className="text-sm text-slate-500">У блокуванні</div>
+            <div className="text-sm text-slate-500">Заблоковано</div>
             <div className="mt-2 text-3xl font-bold text-red-600">{blockedCount}</div>
           </Card>
           <Card>
             <div className="text-sm text-slate-500">Завершили</div>
             <div className="mt-2 text-3xl font-bold text-green-600">{finishedCount}</div>
           </Card>
+          <Card>
+            <div className="text-sm text-slate-500">З порушеннями</div>
+            <div className="mt-2 text-3xl font-bold text-orange-500">{violationsCount}</div>
+          </Card>
         </div>
 
+        {/* Таблиця */}
         <Card>
           {loading ? (
             <div className="py-8 text-center text-slate-500">Завантаження...</div>
@@ -108,55 +171,90 @@ export default function TeacherClassPage({
             <div className="py-8 text-center text-slate-500">Жоден учень ще не розпочав роботу.</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-left">
+              <table className="w-full border-collapse text-left text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 text-sm text-slate-500">
+                  <tr className="border-b border-slate-200 text-slate-500">
                     <th className="px-3 py-3">ПІБ</th>
+                    <th className="px-3 py-3">Предмет</th>
                     <th className="px-3 py-3">Варіант</th>
                     <th className="px-3 py-3">Статус</th>
                     <th className="px-3 py-3">Початок</th>
                     <th className="px-3 py-3">Виходи</th>
-                    <th className="px-3 py-3">Причина блокування</th>
+                    <th className="px-3 py-3">Причина</th>
                     <th className="px-3 py-3"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {students.map((student) => {
                     const exits = exitCountMap[student.id] || 0;
+                    const { label, cls } = statusLabel(student.status);
+                    const blockedMins = student.blocked_at ? minutesSince(student.blocked_at) : 0;
+
                     return (
-                      <tr key={student.id} className="border-b border-slate-100">
-                        <td className="px-3 py-4 font-medium">{student.full_name}</td>
-                        <td className="px-3 py-4">{student.variant}</td>
-                        <td className="px-3 py-4">
-                          <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                            student.status === 'writing'
-                              ? 'bg-blue-100 text-blue-700'
-                              : student.status === 'blocked'
-                              ? 'bg-red-100 text-red-700'
-                              : 'bg-green-100 text-green-700'
-                          }`}>
-                            {student.status === 'writing' ? 'Пише' : student.status === 'blocked' ? 'Заблоковано' : 'Завершив'}
-                          </span>
+                      <tr key={student.id} className="border-b border-slate-100 hover:bg-slate-50">
+                        <td className="px-3 py-3 font-medium">{student.full_name}</td>
+                        <td className="px-3 py-3 text-slate-600">{student.subject || '—'}</td>
+                        <td className="px-3 py-3">{student.variant}</td>
+                        <td className="px-3 py-3">
+                          <div className="flex flex-col gap-1">
+                            <span className={`w-fit rounded-full px-2 py-0.5 text-xs font-semibold ${cls}`}>{label}</span>
+                            {student.status === 'blocked' && blockedMins >= 5 && (
+                              <span className="text-xs text-red-500">заблок. {blockedMins} хв</span>
+                            )}
+                          </div>
                         </td>
-                        <td className="px-3 py-4 text-sm">{formatDateTime(student.started_at)}</td>
-                        <td className="px-3 py-4">
-                          <span className={`font-semibold ${exits > 0 ? 'text-red-600' : 'text-slate-400'}`}>
-                            {exits > 0 ? `${exits} раз` : '—'}
-                          </span>
+                        <td className="px-3 py-3 text-slate-500">{formatDateTime(student.started_at)}</td>
+                        <td className="px-3 py-3">
+                          {exits > 0 ? (
+                            <button
+                              onClick={() => setJournalStudent(student)}
+                              className="font-semibold text-red-600 underline underline-offset-2"
+                            >
+                              {exits} раз
+                            </button>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
                         </td>
-                        <td className="px-3 py-4 text-sm text-slate-500">
+                        <td className="px-3 py-3 text-slate-500 max-w-[160px] truncate">
                           {student.block_reason || '—'}
                         </td>
-                        <td className="px-3 py-4">
-                          {student.status === 'blocked' && (
-                            <button
-                              onClick={() => unlockStudent(student.id)}
-                              disabled={unlocking === student.id}
-                              className="rounded-xl bg-slate-900 px-3 py-1.5 text-xs text-white disabled:opacity-50"
-                            >
-                              {unlocking === student.id ? '...' : 'Розблокувати'}
-                            </button>
-                          )}
+                        <td className="px-3 py-3">
+                          <div className="flex gap-1.5">
+                            {student.subject && (
+                              <>
+                                <button
+                                  onClick={() => setTasksStudent(student)}
+                                  className="rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100"
+                                >
+                                  Завдання
+                                </button>
+                                <button
+                                  onClick={() => window.open(`/teacher/print?sessionId=${student.id}`, '_blank')}
+                                  className="rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100"
+                                >
+                                  Друк
+                                </button>
+                              </>
+                            )}
+                            {student.status === 'blocked' && (
+                              <button
+                                onClick={() => unlockStudent(student.id)}
+                                disabled={unlocking === student.id}
+                                className="rounded-lg bg-slate-900 px-2 py-1 text-xs text-white disabled:opacity-50"
+                              >
+                                {unlocking === student.id ? '...' : 'Розблок.'}
+                              </button>
+                            )}
+                            {student.status === 'blocked' && blockedMins >= 10 && (
+                              <button
+                                onClick={() => finishStudent(student.id)}
+                                className="rounded-lg bg-red-500 px-2 py-1 text-xs text-white"
+                              >
+                                Завершити
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -167,6 +265,65 @@ export default function TeacherClassPage({
           )}
         </Card>
       </div>
+
+      {/* Модаль: Журнал виходів */}
+      {journalStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4" onClick={() => setJournalStudent(null)}>
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold">Журнал виходів — {journalStudent.full_name}</h2>
+              <button onClick={() => setJournalStudent(null)} className="text-2xl leading-none text-slate-400 hover:text-slate-700">×</button>
+            </div>
+            {(exitLogMap[journalStudent.id] || []).length === 0 ? (
+              <p className="text-slate-400">Немає даних</p>
+            ) : (
+              <div className="space-y-2">
+                {(exitLogMap[journalStudent.id] || []).map((log, i) => (
+                  <div key={i} className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 text-sm">
+                    <span className="font-medium text-slate-700">Вихід {i + 1}</span>
+                    <span className="text-slate-500">{formatDateTime(log.exitedAt)}</span>
+                    <span className={`font-semibold ${log.durationSeconds >= 7 ? 'text-red-600' : 'text-orange-500'}`}>
+                      {formatSeconds(log.durationSeconds)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Модаль: Завдання учня */}
+      {tasksStudent && (() => {
+        const work = getStudentWork(tasksStudent);
+        return (
+          <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/70 p-4 pt-8" onClick={() => setTasksStudent(null)}>
+            <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-bold">{tasksStudent.full_name}</h2>
+                <button onClick={() => setTasksStudent(null)} className="text-2xl leading-none text-slate-400 hover:text-slate-700">×</button>
+              </div>
+              <div className="mb-4 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                {tasksStudent.subject} · Варіант {tasksStudent.variant}
+              </div>
+              {!work ? (
+                <p className="text-slate-400">Роботу не знайдено в базі.</p>
+              ) : (
+                <>
+                  <div className="mb-3 font-semibold">{work.title} <span className="font-normal text-slate-400">· {work.work_type}</span></div>
+                  <div className="space-y-2">
+                    {work.tasks.map((task, i) => (
+                      <div key={i} className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                        <span className="font-semibold text-slate-400 mr-2">{i + 1}.</span>{task}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })()}
     </PageContainer>
   );
 }

@@ -50,6 +50,14 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
   const [works, setWorks] = useState<DbWork[]>([]);
   const [loading, setLoading] = useState(true);
   const [password, setPassword] = useState('');
+  const [allClasses, setAllClasses] = useState<number[]>([]);
+
+  // Копіювання
+  const [copyingWork, setCopyingWork] = useState<DbWork | null>(null);
+  const [copyTargetClass, setCopyTargetClass] = useState('');
+  const [copyLoading, setCopyLoading] = useState(false);
+  const [copyError, setCopyError] = useState('');
+  const [copySuccess, setCopySuccess] = useState('');
 
   const [editingWork, setEditingWork] = useState<DbWork | null | 'new'>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
@@ -65,6 +73,9 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
     }
     setPassword(saved);
     fetchWorks();
+    fetch('/api/classes').then((r) => r.json()).then((d) => {
+      if (d.ok) setAllClasses(d.classes.filter((c: number) => c !== numericClassId));
+    });
   }, []);
 
   async function fetchWorks() {
@@ -137,6 +148,32 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
     setSaveSuccess(true);
     await fetchWorks();
     setTimeout(() => { closeEdit(); }, 800);
+  }
+
+  async function copyWork() {
+    if (!copyingWork || !copyTargetClass) return;
+    setCopyLoading(true);
+    setCopyError('');
+    setCopySuccess('');
+    const res = await fetch('/api/works', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        teacherPassword: password,
+        classId: Number(copyTargetClass),
+        variant: copyingWork.variant,
+        subject: copyingWork.subject,
+        workType: copyingWork.work_type,
+        title: copyingWork.title,
+        durationMinutes: copyingWork.duration_minutes,
+        tasks: copyingWork.tasks,
+      }),
+    });
+    const data = await res.json();
+    setCopyLoading(false);
+    if (!data.ok) { setCopyError(data.error || 'Помилка'); return; }
+    setCopySuccess(`Скопійовано в ${copyTargetClass} клас ✓`);
+    setTimeout(() => { setCopyingWork(null); setCopySuccess(''); }, 1200);
   }
 
   async function deleteWork(work: DbWork) {
@@ -223,6 +260,14 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                         >
                           Редагувати
                         </button>
+                        {allClasses.length > 0 && (
+                          <button
+                            onClick={() => { setCopyingWork(work); setCopyTargetClass(String(allClasses[0])); setCopyError(''); setCopySuccess(''); }}
+                            className="rounded-xl border border-slate-300 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
+                          >
+                            Копіювати
+                          </button>
+                        )}
                         <button
                           onClick={() => deleteWork(work)}
                           className="rounded-xl bg-red-500 px-3 py-2 text-xs text-white"
@@ -247,6 +292,45 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
               </div>
             </div>
           ))
+        )}
+
+        {/* Модаль копіювання */}
+        {copyingWork && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+            <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-bold">Копіювати роботу</h2>
+                <button onClick={() => setCopyingWork(null)} className="text-2xl leading-none text-slate-400">×</button>
+              </div>
+              <p className="mb-4 text-sm text-slate-600">
+                <strong>{copyingWork.subject}</strong> · Варіант {copyingWork.variant} · {copyingWork.title}
+              </p>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Скопіювати в клас</label>
+              <select
+                value={copyTargetClass}
+                onChange={(e) => setCopyTargetClass(e.target.value)}
+                className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-700"
+              >
+                {allClasses.map((c) => (
+                  <option key={c} value={c}>{c} клас</option>
+                ))}
+              </select>
+              {copyError && <p className="mt-2 text-sm text-red-600">{copyError}</p>}
+              {copySuccess && <p className="mt-2 text-sm text-green-600">{copySuccess}</p>}
+              <div className="mt-4 flex gap-3">
+                <button
+                  onClick={copyWork}
+                  disabled={copyLoading}
+                  className="flex-1 rounded-2xl bg-slate-900 py-3 text-sm text-white font-semibold disabled:opacity-50"
+                >
+                  {copyLoading ? '...' : 'Скопіювати'}
+                </button>
+                <button onClick={() => setCopyingWork(null)} className="rounded-2xl border border-slate-300 px-5 py-3 text-slate-700 text-sm">
+                  Скасувати
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Форма */}

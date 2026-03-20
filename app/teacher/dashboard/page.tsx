@@ -119,12 +119,17 @@ export default function TeacherDashboardPage() {
 
         <div className="flex items-center justify-between">
           <Title>Панель вчителя</Title>
-          <button
-            onClick={logout}
-            className="rounded-2xl border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
-          >
-            Вийти
-          </button>
+          <div className="flex gap-2">
+            <Link href="/teacher/dashboard/archive" className="rounded-2xl border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">
+              Архів робіт
+            </Link>
+            <button
+              onClick={logout}
+              className="rounded-2xl border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+            >
+              Вийти
+            </button>
+          </div>
         </div>
 
         {/* Додати клас */}
