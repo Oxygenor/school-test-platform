@@ -256,12 +256,6 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
                                     Відповіді
                                   </button>
                                 )}
-                                <button
-                                  onClick={() => window.open(`/teacher/print?sessionId=${student.id}`, '_blank')}
-                                  className="rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100"
-                                >
-                                  Друк
-                                </button>
                               </>
                             )}
                             {student.status === 'blocked' && (
