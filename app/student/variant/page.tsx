@@ -14,6 +14,8 @@ function VariantContent() {
   const studentId = params.get('studentId');
 
   const [examActive, setExamActive] = useState<boolean | null>(null);
+  const [subjects, setSubjects] = useState<string[]>([]);
+  const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
 
   const checkStatus = useCallback(async () => {
     if (!classId) return;
@@ -42,12 +44,24 @@ function VariantContent() {
     checkExistingSession();
   }, [router]);
 
-  // Перевірка статусу + автооновлення кожні 5 секунд
   useEffect(() => {
     checkStatus();
     const interval = setInterval(checkStatus, 5000);
     return () => clearInterval(interval);
   }, [checkStatus]);
+
+  useEffect(() => {
+    if (!classId) return;
+    async function loadSubjects() {
+      const res = await fetch(`/api/works?classId=${classId}`);
+      const data = await res.json();
+      if (data.ok && data.works.length > 0) {
+        const unique = [...new Set<string>(data.works.map((w: { subject: string }) => w.subject))].sort();
+        setSubjects(unique);
+      }
+    }
+    loadSubjects();
+  }, [classId]);
 
   async function chooseVariant(variant: 1 | 2) {
     const el = document.documentElement as any;
@@ -65,6 +79,7 @@ function VariantContent() {
         studentId,
         fullName,
         variant,
+        subject: selectedSubject,
       }),
     });
 
@@ -78,7 +93,6 @@ function VariantContent() {
     router.push(`/student/exam?sessionId=${data.session.id}`);
   }
 
-  // Очікування поки вчитель не дозволить
   if (examActive === false) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 px-6 text-white">
@@ -92,9 +106,7 @@ function VariantContent() {
             <br />
             Сторінка оновлюється автоматично.
           </p>
-          <div className="mt-8 text-sm text-slate-600">
-            {fullName}
-          </div>
+          <div className="mt-8 text-sm text-slate-600">{fullName}</div>
         </div>
       </div>
     );
@@ -110,32 +122,67 @@ function VariantContent() {
 
   return (
     <PageContainer>
-      <div className="mx-auto max-w-3xl">
-        <Card>
-          <Title>Оберіть свій варіант</Title>
+      <div className="mx-auto max-w-3xl space-y-4">
 
-          <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-slate-700">
-            Учень: <strong>{fullName}</strong> · Клас: <strong>{classId}</strong>
-          </div>
+        {/* Вибір предмету */}
+        {!selectedSubject ? (
+          <Card>
+            <Title>Оберіть предмет</Title>
+            <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-slate-700">
+              Учень: <strong>{fullName}</strong> · Клас: <strong>{classId}</strong>
+            </div>
 
-          <div className="mt-6 grid gap-4 grid-cols-2">
+            {subjects.length === 0 ? (
+              <p className="mt-6 text-center text-slate-400">
+                Вчитель ще не додав роботи для цього класу.
+              </p>
+            ) : (
+              <div className="mt-6 grid gap-3">
+                {subjects.map((subject) => (
+                  <button
+                    key={subject}
+                    onClick={() => setSelectedSubject(subject)}
+                    className="w-full rounded-3xl bg-slate-950 px-6 py-5 text-xl font-semibold text-white transition hover:bg-slate-800"
+                  >
+                    {subject}
+                  </button>
+                ))}
+              </div>
+            )}
+          </Card>
+        ) : (
+          /* Вибір варіанту */
+          <Card>
+            <Title>Оберіть свій варіант</Title>
+            <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-slate-700">
+              Учень: <strong>{fullName}</strong> · Клас: <strong>{classId}</strong> · Предмет: <strong>{selectedSubject}</strong>
+            </div>
+
+            <div className="mt-6 grid gap-4 grid-cols-2">
+              <button
+                type="button"
+                className="rounded-3xl bg-slate-950 px-6 py-6 text-2xl font-semibold text-white transition hover:bg-slate-800"
+                onClick={() => chooseVariant(1)}
+              >
+                Варіант 1
+              </button>
+              <button
+                type="button"
+                className="rounded-3xl border-2 border-slate-300 bg-white px-6 py-6 text-2xl font-semibold text-slate-900 transition hover:border-slate-500 hover:bg-slate-50"
+                onClick={() => chooseVariant(2)}
+              >
+                Варіант 2
+              </button>
+            </div>
+
             <button
-              type="button"
-              className="rounded-3xl bg-slate-950 px-6 py-6 text-2xl font-semibold text-white transition hover:bg-slate-800"
-              onClick={() => chooseVariant(1)}
+              onClick={() => setSelectedSubject(null)}
+              className="mt-4 w-full rounded-2xl border border-slate-200 py-3 text-sm text-slate-500 hover:bg-slate-50"
             >
-              Варіант 1
+              ← Змінити предмет
             </button>
-
-            <button
-              type="button"
-              className="rounded-3xl border-2 border-slate-300 bg-white px-6 py-6 text-2xl font-semibold text-slate-900 transition hover:border-slate-500 hover:bg-slate-50"
-              onClick={() => chooseVariant(2)}
-            >
-              Варіант 2
-            </button>
-          </div>
-        </Card>
+          </Card>
+        )}
       </div>
     </PageContainer>
   );

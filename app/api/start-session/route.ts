@@ -3,11 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 
 export async function POST(req: Request) {
   try {
-    const { classId, studentId, fullName, variant } = await req.json();
-
-    if (![6, 7, 10].includes(Number(classId))) {
-      return NextResponse.json({ ok: false, error: 'Некоректний клас' }, { status: 400 });
-    }
+    const { classId, studentId, fullName, variant, subject } = await req.json();
 
     if (![1, 2].includes(Number(variant))) {
       return NextResponse.json({ ok: false, error: 'Некоректний варіант' }, { status: 400 });
@@ -34,8 +30,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, session: existing });
     }
 
-    const workType = Number(classId) === 6 ? 'Самостійна робота' : 'Контрольна робота';
-
     const { data, error } = await supabaseAdmin
       .from('student_sessions')
       .insert({
@@ -43,7 +37,8 @@ export async function POST(req: Request) {
         student_id: studentId,
         full_name: String(fullName || '').trim(),
         variant: Number(variant),
-        work_type: workType,
+        subject: subject ? String(subject).trim() : null,
+        work_type: 'Самостійна робота',
         status: 'writing',
       })
       .select('*')

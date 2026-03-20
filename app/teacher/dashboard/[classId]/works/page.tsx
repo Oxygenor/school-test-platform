@@ -2,6 +2,7 @@
 
 import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Card, PageContainer, Title } from '@/components/ui';
 import { MathText } from '@/components/math-text';
 
@@ -16,6 +17,7 @@ interface DbWork {
   id: string;
   class_id: number;
   variant: number;
+  subject: string;
   work_type: string;
   title: string;
   duration_minutes: number;
@@ -23,6 +25,8 @@ interface DbWork {
 }
 
 interface FormState {
+  subject: string;
+  variant: 1 | 2;
   workType: string;
   title: string;
   durationMinutes: number;
@@ -30,6 +34,8 @@ interface FormState {
 }
 
 const emptyForm = (): FormState => ({
+  subject: '',
+  variant: 1,
   workType: 'Самостійна робота',
   title: '',
   durationMinutes: 40,
@@ -38,27 +44,28 @@ const emptyForm = (): FormState => ({
 
 export default function WorksPage({ params }: { params: Promise<{ classId: string }> }) {
   const { classId } = use(params);
+  const router = useRouter();
   const numericClassId = Number(classId);
 
   const [works, setWorks] = useState<DbWork[]>([]);
   const [loading, setLoading] = useState(true);
   const [password, setPassword] = useState('');
-  const [passwordSaved, setPasswordSaved] = useState(false);
 
-  useEffect(() => {
-    const saved = sessionStorage.getItem('teacherPassword');
-    if (saved) { setPassword(saved); setPasswordSaved(true); }
-  }, []);
-
-  const [editingVariant, setEditingVariant] = useState<1 | 2 | null>(null);
+  const [editingWork, setEditingWork] = useState<DbWork | null | 'new'>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   useEffect(() => {
+    const saved = sessionStorage.getItem('teacherPassword');
+    if (!saved) {
+      router.replace('/teacher/login');
+      return;
+    }
+    setPassword(saved);
     fetchWorks();
-  }, [classId]);
+  }, []);
 
   async function fetchWorks() {
     setLoading(true);
@@ -68,32 +75,35 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
     setLoading(false);
   }
 
-  function openEdit(variant: 1 | 2) {
-    const existing = works.find((w) => w.variant === variant);
-    if (existing) {
-      setForm({
-        workType: existing.work_type,
-        title: existing.title,
-        durationMinutes: existing.duration_minutes,
-        tasks: existing.tasks.length > 0 ? existing.tasks : [''],
-      });
-    } else {
-      setForm(emptyForm());
-    }
-    setEditingVariant(variant);
+  function openNew() {
+    setForm(emptyForm());
+    setEditingWork('new');
+    setSaveError('');
+    setSaveSuccess(false);
+  }
+
+  function openEdit(work: DbWork) {
+    setForm({
+      subject: work.subject,
+      variant: work.variant as 1 | 2,
+      workType: work.work_type,
+      title: work.title,
+      durationMinutes: work.duration_minutes,
+      tasks: work.tasks.length > 0 ? work.tasks : [''],
+    });
+    setEditingWork(work);
     setSaveError('');
     setSaveSuccess(false);
   }
 
   function closeEdit() {
-    setEditingVariant(null);
+    setEditingWork(null);
     setSaveError('');
     setSaveSuccess(false);
   }
 
   async function saveWork() {
-    if (!editingVariant) return;
-    if (!passwordSaved) { setSaveError('Спочатку підтвердіть пароль'); return; }
+    if (!form.subject.trim()) { setSaveError('Вкажіть предмет'); return; }
     if (!form.title.trim()) { setSaveError('Введіть назву роботи'); return; }
     const filteredTasks = form.tasks.filter((t) => t.trim());
     if (filteredTasks.length === 0) { setSaveError('Додайте хоча б одне завдання'); return; }
@@ -107,7 +117,8 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
       body: JSON.stringify({
         teacherPassword: password,
         classId: numericClassId,
-        variant: editingVariant,
+        variant: form.variant,
+        subject: form.subject,
         workType: form.workType,
         title: form.title,
         durationMinutes: form.durationMinutes,
@@ -125,13 +136,13 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
 
     setSaveSuccess(true);
     await fetchWorks();
-    setTimeout(() => { closeEdit(); }, 1000);
+    setTimeout(() => { closeEdit(); }, 800);
   }
 
-  async function deleteWork(variant: number) {
-    if (!passwordSaved) return;
+  async function deleteWork(work: DbWork) {
+    if (!confirm(`Видалити роботу "${work.title}"?`)) return;
     const res = await fetch(
-      `/api/works?classId=${numericClassId}&variant=${variant}&teacherPassword=${encodeURIComponent(password)}`,
+      `/api/works?classId=${numericClassId}&variant=${work.variant}&subject=${encodeURIComponent(work.subject)}&teacherPassword=${encodeURIComponent(password)}`,
       { method: 'DELETE' }
     );
     const data = await res.json();
@@ -146,124 +157,142 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
     });
   }
 
-  function addTask() {
-    setForm((prev) => ({ ...prev, tasks: [...prev.tasks, ''] }));
-  }
-
-  function removeTask(index: number) {
-    setForm((prev) => ({
-      ...prev,
-      tasks: prev.tasks.filter((_, i) => i !== index),
-    }));
-  }
+  // Групуємо роботи по предметах
+  const bySubject = works.reduce<Record<string, DbWork[]>>((acc, w) => {
+    if (!acc[w.subject]) acc[w.subject] = [];
+    acc[w.subject].push(w);
+    return acc;
+  }, {});
 
   return (
     <PageContainer>
       <div className="mx-auto max-w-4xl space-y-6">
 
-        {/* Заголовок */}
         <div className="flex items-center justify-between">
           <div>
             <Title>{numericClassId} клас — Роботи</Title>
             <p className="mt-1 text-slate-500 text-sm">
-              Для математики використовуйте синтаксис: <code className="bg-slate-100 px-1 rounded">$\frac{'{2}'}{'{3}'}$</code> → отримаєте дріб
+              Для дробів: <code className="bg-slate-100 px-1 rounded">$\frac{'{2}'}{'{3}'}$</code>
             </p>
           </div>
-          <Link
-            href={`/teacher/dashboard/${classId}`}
-            className="rounded-2xl bg-slate-200 px-4 py-3 text-sm text-slate-900 hover:bg-slate-300"
-          >
-            Назад
-          </Link>
+          <div className="flex gap-2">
+            <button
+              onClick={openNew}
+              className="rounded-2xl bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-700"
+            >
+              + Додати роботу
+            </button>
+            <Link
+              href={`/teacher/dashboard`}
+              className="rounded-2xl bg-slate-200 px-4 py-2 text-sm text-slate-900 hover:bg-slate-300"
+            >
+              Назад
+            </Link>
+          </div>
         </div>
 
-        {!passwordSaved && (
-          <Card>
-            <p className="text-sm text-amber-700 bg-amber-50 rounded-xl p-3">
-              Пароль не введено. Поверніться до{' '}
-              <Link href="/teacher/dashboard" className="underline font-medium">кабінету вчителя</Link>{' '}
-              та підтвердіть пароль.
-            </p>
-          </Card>
-        )}
-
-        {/* Варіанти */}
         {loading ? (
           <div className="text-center text-slate-500 py-8">Завантаження...</div>
+        ) : works.length === 0 ? (
+          <Card>
+            <p className="text-center text-slate-400 py-4">
+              Немає жодної роботи. Натисніть "Додати роботу".
+            </p>
+          </Card>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            {([1, 2] as const).map((variant) => {
-              const work = works.find((w) => w.variant === variant);
-              return (
-                <Card key={variant}>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-                        Варіант {variant}
+          Object.entries(bySubject).sort(([a], [b]) => a.localeCompare(b)).map(([subject, subjectWorks]) => (
+            <div key={subject}>
+              <h2 className="mb-3 text-lg font-bold text-slate-700">{subject}</h2>
+              <div className="grid gap-4 md:grid-cols-2">
+                {subjectWorks.sort((a, b) => a.variant - b.variant).map((work) => (
+                  <Card key={work.id}>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+                          Варіант {work.variant}
+                        </div>
+                        <div className="mt-1 font-bold text-slate-900">{work.title}</div>
+                        <div className="mt-1 text-sm text-slate-500">
+                          {work.work_type} · {work.duration_minutes} хв · {work.tasks.length} завдань
+                        </div>
                       </div>
-                      {work ? (
-                        <>
-                          <div className="mt-1 font-bold text-slate-900">{work.title}</div>
-                          <div className="mt-1 text-sm text-slate-500">
-                            {work.work_type} · {work.duration_minutes} хв · {work.tasks.length} завдань
-                          </div>
-                        </>
-                      ) : (
-                        <div className="mt-1 text-sm text-slate-400">Роботу не додано</div>
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => openEdit(variant)}
-                        disabled={!passwordSaved}
-                        className="rounded-xl bg-slate-900 px-3 py-2 text-xs text-white disabled:opacity-40"
-                      >
-                        {work ? 'Редагувати' : 'Додати'}
-                      </button>
-                      {work && (
+                      <div className="flex gap-2 shrink-0">
                         <button
-                          onClick={() => deleteWork(variant)}
-                          disabled={!passwordSaved}
-                          className="rounded-xl bg-red-500 px-3 py-2 text-xs text-white disabled:opacity-40"
+                          onClick={() => openEdit(work)}
+                          className="rounded-xl bg-slate-900 px-3 py-2 text-xs text-white"
+                        >
+                          Редагувати
+                        </button>
+                        <button
+                          onClick={() => deleteWork(work)}
+                          className="rounded-xl bg-red-500 px-3 py-2 text-xs text-white"
                         >
                           Видалити
                         </button>
-                      )}
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Список завдань */}
-                  {work && (
-                    <div className="mt-4 space-y-2">
-                      {work.tasks.map((task, i) => (
-                        <div
-                          key={i}
-                          className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700"
-                        >
-                          <span className="font-semibold text-slate-400 mr-2">{i + 1}.</span>
-                          <MathText text={task} />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </Card>
-              );
-            })}
-          </div>
+                    {work.tasks.length > 0 && (
+                      <div className="mt-4 space-y-2">
+                        {work.tasks.map((task, i) => (
+                          <div key={i} className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                            <span className="font-semibold text-slate-400 mr-2">{i + 1}.</span>
+                            <MathText text={task} />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </Card>
+                ))}
+              </div>
+            </div>
+          ))
         )}
 
-        {/* Форма редагування */}
-        {editingVariant !== null && (
+        {/* Форма */}
+        {editingWork !== null && (
           <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/70 p-4 pt-8">
             <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl">
               <div className="mb-5 flex items-center justify-between">
                 <h2 className="text-xl font-bold">
-                  Варіант {editingVariant} — {numericClassId} клас
+                  {editingWork === 'new' ? 'Нова робота' : `Редагування — ${(editingWork as DbWork).subject}, Варіант ${(editingWork as DbWork).variant}`}
                 </h2>
                 <button onClick={closeEdit} className="text-slate-400 hover:text-slate-700 text-2xl leading-none">×</button>
               </div>
 
               <div className="space-y-4">
+
+                {/* Предмет */}
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Предмет</label>
+                  <input
+                    type="text"
+                    value={form.subject}
+                    onChange={(e) => setForm((p) => ({ ...p, subject: e.target.value }))}
+                    placeholder="Наприклад: Математика, Фізика..."
+                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-700"
+                  />
+                </div>
+
+                {/* Варіант */}
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Варіант</label>
+                  <div className="flex gap-3">
+                    {([1, 2] as const).map((v) => (
+                      <button
+                        key={v}
+                        onClick={() => setForm((p) => ({ ...p, variant: v }))}
+                        className={`flex-1 rounded-2xl border py-3 text-sm font-semibold transition ${
+                          form.variant === v
+                            ? 'border-slate-900 bg-slate-900 text-white'
+                            : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        Варіант {v}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
                 {/* Тип роботи */}
                 <div>
@@ -293,9 +322,7 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
 
                 {/* Тривалість */}
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">
-                    Тривалість (хвилини)
-                  </label>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Тривалість (хвилини)</label>
                   <input
                     type="number"
                     min={5}
@@ -311,7 +338,7 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                   <label className="mb-2 block text-sm font-medium text-slate-700">
                     Завдання
                     <span className="ml-2 text-xs font-normal text-slate-400">
-                      (для дробів: $\frac{'{2}'}{'{3}'}$, для кореня: $\sqrt{'{x}'}$)
+                      (дроби: $\frac{'{2}'}{'{3}'}$, корінь: $\sqrt{'{x}'}$)
                     </span>
                   </label>
                   <div className="space-y-3">
@@ -328,14 +355,13 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                           />
                           {form.tasks.length > 1 && (
                             <button
-                              onClick={() => removeTask(i)}
+                              onClick={() => setForm((p) => ({ ...p, tasks: p.tasks.filter((_, idx) => idx !== i) }))}
                               className="mt-1 text-red-400 hover:text-red-600 text-lg leading-none"
                             >
                               ×
                             </button>
                           )}
                         </div>
-                        {/* Прев'ю */}
                         {task.trim() && (
                           <div className="ml-7 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">
                             <span className="text-xs text-slate-400 mr-1">Прев'ю:</span>
@@ -346,7 +372,7 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                     ))}
                   </div>
                   <button
-                    onClick={addTask}
+                    onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, ''] }))}
                     className="mt-3 rounded-xl border border-dashed border-slate-300 px-4 py-2 text-sm text-slate-500 hover:border-slate-500 hover:text-slate-700 w-full"
                   >
                     + Додати завдання
