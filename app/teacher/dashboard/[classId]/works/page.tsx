@@ -112,7 +112,7 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
       return;
     }
     setToken(saved);
-    fetchWorks();
+    fetchWorks(saved);
     fetch('/api/classes', { headers: { 'x-teacher-token': saved } })
       .then((r) => r.json())
       .then((d) => {
@@ -120,9 +120,12 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
       });
   }, []);
 
-  async function fetchWorks() {
+  async function fetchWorks(authToken?: string) {
     setLoading(true);
-    const res = await fetch(`/api/works?classId=${numericClassId}`);
+    const t = authToken ?? token;
+    const res = await fetch(`/api/works?classId=${numericClassId}`, {
+      headers: { 'x-teacher-token': t },
+    });
     const data = await res.json();
     if (data.ok) setWorks(data.works);
     setLoading(false);
