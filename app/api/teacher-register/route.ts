@@ -22,7 +22,7 @@ export async function POST(req: Request) {
 
   if (error) {
     if (error.code === '23505') {
-      return NextResponse.json({ ok: false, error: 'Таке ім'я вже зайняте' }, { status: 409 });
+      return NextResponse.json({ ok: false, error: "Таке ім'я вже зайняте" }, { status: 409 });
     }
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
