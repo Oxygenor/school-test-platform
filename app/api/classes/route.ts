@@ -33,27 +33,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: 'Введіть номер від 1 до 12' }, { status: 400 });
   }
 
-  // Перевіряємо чи вчитель вже має цей клас
-  const { data: existing } = await supabaseAdmin
-    .from('teacher_classes')
-    .select('class_id')
-    .eq('teacher_id', teacher.id)
-    .eq('class_id', id)
-    .maybeSingle();
-
-  if (existing) {
-    return NextResponse.json({ ok: false, error: 'Цей клас вже є у вас' }, { status: 409 });
-  }
-
   // Переконуємось що клас існує в таблиці classes
   await supabaseAdmin
     .from('classes')
     .upsert({ id }, { onConflict: 'id', ignoreDuplicates: true });
 
-  // Додаємо зв'язок вчитель-клас
+  // Додаємо зв'язок вчитель-клас (ігноруємо дублікати)
   const { error } = await supabaseAdmin
     .from('teacher_classes')
-    .insert({ teacher_id: teacher.id, class_id: id });
+    .upsert(
+      { teacher_id: teacher.id, class_id: id },
+      { onConflict: 'teacher_id,class_id', ignoreDuplicates: true }
+    );
 
   if (error) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
