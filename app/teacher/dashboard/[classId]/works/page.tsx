@@ -13,7 +13,7 @@ const WORK_TYPES = [
   'Тематична контрольна робота',
 ];
 
-type StoredTask = string | { text: string; choices: string[]; correctChoice?: number };
+type StoredTask = string | { text: string; choices: string[]; correctChoice?: number; points?: number };
 
 interface DbWork {
   id: string;
@@ -32,6 +32,7 @@ interface TaskForm {
   hasChoices: boolean;
   choices: string[];
   correctChoice: number | null;
+  points: number;
 }
 
 interface FormState {
@@ -47,20 +48,20 @@ interface FormState {
 const CHOICE_LABELS = ['А', 'Б', 'В', 'Г', 'Д'];
 
 function taskToForm(t: StoredTask): TaskForm {
-  if (typeof t === 'string') return { text: t, hasChoices: false, choices: ['', '', '', ''], correctChoice: null };
+  if (typeof t === 'string') return { text: t, hasChoices: false, choices: ['', '', '', ''], correctChoice: null, points: 1 };
   const choices = [...(t.choices || [])];
   while (choices.length < 4) choices.push('');
-  return { text: t.text, hasChoices: true, choices, correctChoice: t.correctChoice ?? null };
+  return { text: t.text, hasChoices: true, choices, correctChoice: t.correctChoice ?? null, points: t.points ?? 1 };
 }
 
 function formToTask(t: TaskForm): StoredTask {
   const filtered = t.choices.filter((c) => c.trim());
   if (t.hasChoices && filtered.length > 0) {
-    const obj: any = { text: t.text, choices: filtered };
+    const obj: any = { text: t.text, choices: filtered, points: t.points };
     if (t.correctChoice !== null) obj.correctChoice = t.correctChoice;
     return obj;
   }
-  return t.text;
+  return { text: t.text, choices: [], points: t.points };
 }
 
 function parseTask(t: StoredTask): { text: string; choices: string[] } {
@@ -74,7 +75,7 @@ const emptyForm = (): FormState => ({
   workType: 'Самостійна робота',
   title: '',
   durationMinutes: 40,
-  tasks: [{ text: '', hasChoices: false, choices: ['', '', '', ''], correctChoice: null }],
+  tasks: [{ text: '', hasChoices: false, choices: ['', '', '', ''], correctChoice: null, points: 1 }],
   onlineMode: false,
 });
 
@@ -136,7 +137,7 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
       workType: work.work_type,
       title: work.title,
       durationMinutes: work.duration_minutes,
-      tasks: work.tasks.length > 0 ? work.tasks.map(taskToForm) : [{ text: '', hasChoices: false, choices: ['', '', '', ''], correctChoice: null }],
+      tasks: work.tasks.length > 0 ? work.tasks.map(taskToForm) : [{ text: '', hasChoices: false, choices: ['', '', '', ''], correctChoice: null, points: 1 }],
       onlineMode: work.online_mode ?? false,
     });
     setEditingWork(work);
@@ -539,6 +540,21 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                             placeholder="Текст завдання..."
                             className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-700 resize-none"
                           />
+                          <div className="flex flex-col items-center gap-1 shrink-0">
+                            <label className="text-xs text-slate-400">балів</label>
+                            <input
+                              type="number"
+                              min={1}
+                              max={99}
+                              value={task.points}
+                              onChange={(e) => setForm((p) => {
+                                const tasks = [...p.tasks];
+                                tasks[i] = { ...tasks[i], points: Math.max(1, Number(e.target.value)) };
+                                return { ...p, tasks };
+                              })}
+                              className="w-14 rounded-lg border border-slate-300 px-2 py-1.5 text-center text-sm outline-none focus:border-slate-700"
+                            />
+                          </div>
                           {form.tasks.length > 1 && (
                             <button
                               onClick={() => setForm((p) => ({ ...p, tasks: p.tasks.filter((_, idx) => idx !== i) }))}
@@ -625,7 +641,7 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                     ))}
                   </div>
                   <button
-                    onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, { text: '', hasChoices: false, choices: ['', '', '', ''], correctChoice: null }] }))}
+                    onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, { text: '', hasChoices: false, choices: ['', '', '', ''], correctChoice: null, points: 1 }] }))}
                     className="mt-3 rounded-xl border border-dashed border-slate-300 px-4 py-2 text-sm text-slate-500 hover:border-slate-500 hover:text-slate-700 w-full"
                   >
                     + Додати завдання

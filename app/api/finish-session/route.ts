@@ -12,6 +12,7 @@ export async function POST(req: Request) {
 
   const finishedAt = new Date().toISOString();
   let score: number | null = null;
+  let maxScore: number | null = null;
   let results: any[] = [];
 
   // Розраховуємо оцінку якщо є відповіді
@@ -28,21 +29,25 @@ export async function POST(req: Request) {
     const { data: work } = await workQuery.single();
 
     if (work) {
-      let correct = 0;
-      let total = 0;
+      let earnedPoints = 0;
+      let maxPoints = 0;
 
       results = (work.tasks || []).map((task: any, i: number) => {
         if (typeof task === 'string' || task.correctChoice === undefined || task.correctChoice === null) {
-          return { taskIndex: i, answer: answers[i] ?? null, correctAnswer: null, isCorrect: null };
+          return { taskIndex: i, answer: answers[i + 1] ?? null, correctAnswer: null, isCorrect: null, points: null };
         }
-        total++;
+        const pts = task.points ?? 1;
+        maxPoints += pts;
         const correctLabel = CHOICE_LABELS[task.correctChoice];
-        const isCorrect = answers[i] === correctLabel;
-        if (isCorrect) correct++;
-        return { taskIndex: i, answer: answers[i] ?? null, correctAnswer: correctLabel, isCorrect };
+        const isCorrect = answers[i + 1] === correctLabel;
+        if (isCorrect) earnedPoints += pts;
+        return { taskIndex: i, answer: answers[i + 1] ?? null, correctAnswer: correctLabel, isCorrect, points: pts };
       });
 
-      score = total > 0 ? Math.round((correct / total) * 100) : null;
+      if (maxPoints > 0) {
+        score = earnedPoints;
+        maxScore = maxPoints;
+      }
     }
   }
 
@@ -60,5 +65,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, score, results });
+  return NextResponse.json({ ok: true, score, maxScore, results });
 }

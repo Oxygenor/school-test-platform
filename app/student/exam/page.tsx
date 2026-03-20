@@ -28,7 +28,7 @@ function ExamContent() {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [fontSize, setFontSize] = useState<'md' | 'lg' | 'xl'>('md');
   const [answers, setAnswers] = useState<Record<number, string>>({});
-  const [scoreResults, setScoreResults] = useState<{ score: number; results: any[] } | null>(null);
+  const [scoreResults, setScoreResults] = useState<{ score: number; maxScore: number; results: any[] } | null>(null);
 
   const noSleepRef = useRef<any>(null);
   const focusLostCountRef = useRef(0);
@@ -324,7 +324,7 @@ function ExamContent() {
     });
     const data = await res.json();
     if (data.score !== null && data.score !== undefined) {
-      setScoreResults({ score: data.score, results: data.results || [] });
+      setScoreResults({ score: data.score, maxScore: data.maxScore ?? data.score, results: data.results || [] });
       setFinishConfirm(false);
     } else {
       router.push('/');
@@ -518,10 +518,10 @@ function ExamContent() {
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/90 p-4 pt-8">
           <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
             <div className="text-center mb-6">
-              <div className="text-5xl mb-3">{scoreResults.score >= 90 ? '🏆' : scoreResults.score >= 60 ? '👍' : '📝'}</div>
-              <div className="text-3xl font-bold">{scoreResults.score}%</div>
+              <div className="text-5xl mb-3">{scoreResults.score >= scoreResults.maxScore * 0.9 ? '🏆' : scoreResults.score >= scoreResults.maxScore * 0.6 ? '👍' : '📝'}</div>
+              <div className="text-3xl font-bold">{scoreResults.score} <span className="text-xl font-normal text-slate-500">з {scoreResults.maxScore} балів</span></div>
               <p className="mt-2 text-slate-500">
-                {scoreResults.results.filter((r: any) => r.isCorrect).length} з {scoreResults.results.filter((r: any) => r.correctAnswer !== null).length} правильно
+                {scoreResults.results.filter((r: any) => r.isCorrect).length} з {scoreResults.results.filter((r: any) => r.correctAnswer !== null).length} правильних відповідей
               </p>
             </div>
             <div className="space-y-2 max-h-96 overflow-y-auto">
@@ -531,6 +531,7 @@ function ExamContent() {
                   <div key={i} className={`rounded-xl p-3 text-sm flex items-center justify-between ${r.isCorrect ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
                     <span className="font-medium text-slate-700">Завдання {r.taskIndex + 1}</span>
                     <div className="flex items-center gap-3 text-xs">
+                      {r.points && <span className={`font-bold ${r.isCorrect ? 'text-green-600' : 'text-slate-400'}`}>{r.isCorrect ? `+${r.points}` : '0'} б</span>}
                       <span className="text-slate-500">Ваша: <strong>{r.answer || '—'}</strong></span>
                       {!r.isCorrect && <span className="text-green-700">Правильна: <strong>{r.correctAnswer}</strong></span>}
                       <span className={r.isCorrect ? 'text-green-600 text-base' : 'text-red-500 text-base'}>{r.isCorrect ? '✓' : '✗'}</span>

@@ -114,6 +114,11 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
     return works.find((w) => w.variant === s.variant && w.subject === s.subject) ?? null;
   }
 
+  function getMaxScore(work: DbWork | null): number {
+    if (!work) return 0;
+    return work.tasks.reduce((sum: number, t: any) => sum + (typeof t === 'string' ? 1 : (t.points ?? 1)), 0);
+  }
+
   function statusLabel(status: string) {
     if (status === 'writing') return { label: 'Пише', cls: 'bg-blue-100 text-blue-700' };
     if (status === 'blocked') return { label: 'Заблоковано', cls: 'bg-red-100 text-red-700' };
@@ -205,11 +210,15 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
                           </div>
                         </td>
                         <td className="px-3 py-3">
-                          {student.score !== null && student.score !== undefined ? (
-                            <span className={`font-bold ${student.score >= 90 ? 'text-green-600' : student.score >= 60 ? 'text-orange-500' : 'text-red-600'}`}>
-                              {student.score}%
-                            </span>
-                          ) : (
+                          {student.score !== null && student.score !== undefined ? (() => {
+                            const max = getMaxScore(getStudentWork(student));
+                            const pct = max > 0 ? student.score / max : 0;
+                            return (
+                              <span className={`font-bold ${pct >= 0.9 ? 'text-green-600' : pct >= 0.6 ? 'text-orange-500' : 'text-red-600'}`}>
+                                {student.score}{max > 0 ? `/${max}` : ''}
+                              </span>
+                            );
+                          })() : (
                             <span className="text-slate-400">—</span>
                           )}
                         </td>
@@ -315,6 +324,8 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
       {answersStudent && (() => {
         const work = getStudentWork(answersStudent);
         const CHOICE_LABELS = ['А', 'Б', 'В', 'Г', 'Д', 'Е'];
+        const maxScore = getMaxScore(work);
+        const pct = maxScore > 0 && answersStudent.score !== null ? answersStudent.score / maxScore : 0;
         return (
           <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/70 p-4 pt-8" onClick={() => setAnswersStudent(null)}>
             <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -325,8 +336,8 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
               <div className="mb-4 flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
                 <span>{answersStudent.subject} · Варіант {answersStudent.variant}</span>
                 {answersStudent.score !== null && answersStudent.score !== undefined && (
-                  <span className={`font-bold text-base ${answersStudent.score >= 90 ? 'text-green-600' : answersStudent.score >= 60 ? 'text-orange-500' : 'text-red-600'}`}>
-                    {answersStudent.score}%
+                  <span className={`font-bold text-base ${pct >= 0.9 ? 'text-green-600' : pct >= 0.6 ? 'text-orange-500' : 'text-red-600'}`}>
+                    {answersStudent.score}{maxScore > 0 ? `/${maxScore} балів` : ' балів'}
                   </span>
                 )}
               </div>
@@ -335,10 +346,11 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
               ) : (
                 <div className="space-y-2">
                   {work.tasks.map((task, i) => {
-                    const taskObj = typeof task === 'string' ? null : task as { text: string; choices?: string[]; correctChoice?: number };
+                    const taskObj = typeof task === 'string' ? null : task as { text: string; choices?: string[]; correctChoice?: number; points?: number };
                     const correctLabel = taskObj?.correctChoice !== undefined && taskObj?.choices
                       ? CHOICE_LABELS[taskObj.correctChoice] ?? null
                       : null;
+                    const taskPoints = taskObj?.points ?? 1;
                     const studentAnswer = (answersStudent.answers ?? {})[i + 1];
                     const isCorrect = correctLabel !== null && studentAnswer === correctLabel;
                     const isWrong = correctLabel !== null && studentAnswer && studentAnswer !== correctLabel;
@@ -347,6 +359,7 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
                         <span className="font-semibold text-slate-400 mr-2">{i + 1}.</span>
                         <span className="flex-1 text-slate-700 truncate">{typeof task === 'string' ? task : (task as { text: string }).text}</span>
                         <div className="ml-3 flex items-center gap-2 shrink-0">
+                          {correctLabel && <span className="text-xs text-slate-400">{taskPoints} б</span>}
                           {studentAnswer ? (
                             <span className={`font-bold ${isCorrect ? 'text-green-600' : isWrong ? 'text-red-600' : 'text-slate-600'}`}>{studentAnswer}</span>
                           ) : (
