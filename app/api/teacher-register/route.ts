@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { hashPassword } from '@/lib/teacher-auth';
 
 export async function POST(req: Request) {
-  const { name, password } = await req.json();
+  const { name, password, subjects } = await req.json();
 
   if (!name?.trim() || !password?.trim()) {
     return NextResponse.json({ ok: false, error: "Введіть ім'я та пароль" }, { status: 400 });
@@ -11,12 +11,15 @@ export async function POST(req: Request) {
   if (password.length < 4) {
     return NextResponse.json({ ok: false, error: 'Пароль мінімум 4 символи' }, { status: 400 });
   }
+  if (!subjects || !Array.isArray(subjects) || subjects.length === 0) {
+    return NextResponse.json({ ok: false, error: 'Оберіть хоча б один предмет' }, { status: 400 });
+  }
 
   const password_hash = await hashPassword(password);
 
   const { data, error } = await supabaseAdmin
     .from('teachers')
-    .insert({ name: name.trim(), password_hash })
+    .insert({ name: name.trim(), password_hash, subjects })
     .select('id, name')
     .single();
 
@@ -27,7 +30,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
 
-  // Автоматично створюємо токен після реєстрації
   const { data: session } = await supabaseAdmin
     .from('teacher_sessions')
     .insert({ teacher_id: data.id })

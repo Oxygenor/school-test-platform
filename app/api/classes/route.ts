@@ -33,6 +33,34 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: 'Введіть номер від 1 до 12' }, { status: 400 });
   }
 
+  // Перевіряємо конфлікт предметів: чи є вже вчитель з таким же предметом у цьому класі
+  const { data: myTeacher } = await supabaseAdmin
+    .from('teachers')
+    .select('subjects')
+    .eq('id', teacher.id)
+    .single();
+
+  const mySubjects: string[] = myTeacher?.subjects || [];
+
+  if (mySubjects.length > 0) {
+    const { data: othersInClass } = await supabaseAdmin
+      .from('teacher_classes')
+      .select('teacher_id, teachers!inner(subjects)')
+      .eq('class_id', id)
+      .neq('teacher_id', teacher.id);
+
+    for (const other of othersInClass || []) {
+      const otherSubjects: string[] = (other.teachers as any)?.subjects || [];
+      const conflict = mySubjects.find((s) => otherSubjects.includes(s));
+      if (conflict) {
+        return NextResponse.json(
+          { ok: false, error: `Вчитель з предметом "${conflict}" вже веде цей клас` },
+          { status: 409 }
+        );
+      }
+    }
+  }
+
   // Переконуємось що клас існує в таблиці classes
   await supabaseAdmin
     .from('classes')

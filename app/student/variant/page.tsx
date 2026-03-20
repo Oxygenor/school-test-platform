@@ -5,6 +5,12 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { Card, PageContainer, Title } from '@/components/ui';
 import { StudentSessionGuard } from '@/components/student-session-guard';
 
+interface SubjectOption {
+  subject: string;
+  teacherId: string;
+  teacherName: string;
+}
+
 function VariantContent() {
   const router = useRouter();
   const params = useSearchParams();
@@ -13,43 +19,12 @@ function VariantContent() {
   const fullName = params.get('fullName');
   const studentId = params.get('studentId');
 
+  const [subjects, setSubjects] = useState<SubjectOption[]>([]);
+  const [selectedOption, setSelectedOption] = useState<SubjectOption | null>(null);
   const [examActive, setExamActive] = useState<boolean | null>(null);
-  const [subjects, setSubjects] = useState<string[]>([]);
-  const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
+  const [loadingSubjects, setLoadingSubjects] = useState(false);
 
-  // teacherId — вчитель якого іспит приєднуємось
-  const [teacherId, setTeacherId] = useState<string | null>(params.get('teacherId'));
-  const [teacherName, setTeacherName] = useState<string | null>(params.get('teacherName'));
-
-  // Якщо кілька активних вчителів — показуємо вибір
-  const [activeExams, setActiveExams] = useState<{ teacherId: string; teacherName: string }[]>([]);
-  const [showTeacherPicker, setShowTeacherPicker] = useState(false);
-
-  const checkStatus = useCallback(async () => {
-    if (!classId) return;
-    if (teacherId) {
-      const res = await fetch(`/api/exam-status?classId=${classId}&teacherId=${teacherId}`);
-      const data = await res.json();
-      setExamActive(data.active ?? false);
-    } else {
-      // Немає обраного вчителя — знаходимо активні іспити
-      const res = await fetch(`/api/active-exams?classId=${classId}`);
-      const data = await res.json();
-      const exams: { teacherId: string; teacherName: string }[] = data.exams || [];
-      if (exams.length === 1) {
-        setTeacherId(exams[0].teacherId);
-        setTeacherName(exams[0].teacherName);
-        setExamActive(true);
-      } else if (exams.length > 1) {
-        setActiveExams(exams);
-        setShowTeacherPicker(true);
-        setExamActive(true);
-      } else {
-        setExamActive(false);
-      }
-    }
-  }, [classId, teacherId]);
-
+  // Перевіряємо існуючу сесію
   useEffect(() => {
     async function checkExistingSession() {
       const sessionId = localStorage.getItem('studentSessionId');
@@ -67,29 +42,30 @@ function VariantContent() {
     checkExistingSession();
   }, [router]);
 
-  useEffect(() => {
-    checkStatus();
-    const interval = setInterval(checkStatus, 5000);
-    return () => clearInterval(interval);
-  }, [checkStatus]);
-
-  // Завантажуємо предмети тільки цього вчителя
-  useEffect(() => {
-    if (!classId || !teacherId) return;
-    async function loadSubjects() {
-      const res = await fetch(`/api/works?classId=${classId}`, {
-        headers: { 'x-teacher-id-filter': teacherId! },
-      });
-      const data = await res.json();
-      if (data.ok && data.works.length > 0) {
-        const unique = [...new Set<string>(data.works.map((w: { subject: string }) => w.subject))].sort();
-        setSubjects(unique);
-      }
+  // Завантажуємо предмети (активні іспити з іменем вчителя)
+  const loadSubjects = useCallback(async () => {
+    if (!classId) return;
+    setLoadingSubjects(true);
+    const res = await fetch(`/api/student-subjects?classId=${classId}`);
+    const data = await res.json();
+    if (data.ok) {
+      setSubjects(data.subjects);
+      setExamActive(data.subjects.length > 0);
+    } else {
+      setExamActive(false);
     }
+    setLoadingSubjects(false);
+  }, [classId]);
+
+  useEffect(() => {
     loadSubjects();
-  }, [classId, teacherId]);
+    const interval = setInterval(loadSubjects, 5000);
+    return () => clearInterval(interval);
+  }, [loadSubjects]);
 
   async function chooseVariant(variant: 1 | 2) {
+    if (!selectedOption) return;
+
     const el = document.documentElement as any;
     if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
     else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
@@ -102,8 +78,8 @@ function VariantContent() {
         studentId,
         fullName,
         variant,
-        subject: selectedSubject,
-        teacherId,
+        subject: selectedOption.subject,
+        teacherId: selectedOption.teacherId,
       }),
     });
 
@@ -117,32 +93,17 @@ function VariantContent() {
     router.push(`/student/exam?sessionId=${data.session.id}`);
   }
 
-  // Вибір вчителя (якщо кілька активних)
-  if (showTeacherPicker && !teacherId) {
+  // Завантаження
+  if (examActive === null || loadingSubjects && subjects.length === 0) {
     return (
-      <PageContainer>
-        <div className="mx-auto max-w-lg">
-          <Card>
-            <Title>Оберіть іспит</Title>
-            <p className="mt-2 text-slate-500">Для {classId} класу доступно кілька іспитів:</p>
-            <div className="mt-4 grid gap-3">
-              {activeExams.map((exam) => (
-                <button
-                  key={exam.teacherId}
-                  onClick={() => { setTeacherId(exam.teacherId); setTeacherName(exam.teacherName); setShowTeacherPicker(false); }}
-                  className="w-full rounded-3xl bg-slate-950 px-6 py-5 text-lg font-semibold text-white hover:bg-slate-800"
-                >
-                  {exam.teacherName}
-                </button>
-              ))}
-            </div>
-          </Card>
-        </div>
-      </PageContainer>
+      <div className="flex min-h-screen items-center justify-center bg-slate-950">
+        <div className="text-slate-400">Завантаження...</div>
+      </div>
     );
   }
 
-  if (examActive === false) {
+  // Немає активних іспитів
+  if (examActive === false || subjects.length === 0) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 px-6 text-white">
         <div className="w-full max-w-sm text-center">
@@ -152,17 +113,8 @@ function VariantContent() {
             Вчитель ще не розпочав роботу для {classId} класу.
             <br />Сторінка оновлюється автоматично.
           </p>
-          {teacherName && <div className="mt-4 text-sm text-slate-500">{teacherName}</div>}
           <div className="mt-2 text-sm text-slate-600">{fullName}</div>
         </div>
-      </div>
-    );
-  }
-
-  if (examActive === null) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950">
-        <div className="text-slate-400">Завантаження...</div>
       </div>
     );
   }
@@ -171,35 +123,34 @@ function VariantContent() {
     <PageContainer>
       <div className="mx-auto max-w-3xl space-y-4">
 
-        {/* Вибір предмету */}
-        {!selectedSubject ? (
+        {!selectedOption ? (
+          // Крок 1: Вибір предмету
           <Card>
             <Title>Оберіть предмет</Title>
             <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-slate-700">
               Учень: <strong>{fullName}</strong> · Клас: <strong>{classId}</strong>
-              {teacherName && <> · <strong>{teacherName}</strong></>}
             </div>
-            {subjects.length === 0 ? (
-              <p className="mt-6 text-center text-slate-400">Вчитель ще не додав роботи для цього класу.</p>
-            ) : (
-              <div className="mt-6 grid gap-3">
-                {subjects.map((subject) => (
-                  <button
-                    key={subject}
-                    onClick={() => setSelectedSubject(subject)}
-                    className="w-full rounded-3xl bg-slate-950 px-6 py-5 text-xl font-semibold text-white transition hover:bg-slate-800"
-                  >
-                    {subject}
-                  </button>
-                ))}
-              </div>
-            )}
+            <div className="mt-6 grid gap-3">
+              {subjects.map((opt) => (
+                <button
+                  key={`${opt.subject}__${opt.teacherId}`}
+                  onClick={() => setSelectedOption(opt)}
+                  className="w-full rounded-3xl bg-slate-950 px-6 py-5 text-left transition hover:bg-slate-800"
+                >
+                  <div className="text-xl font-semibold text-white">{opt.subject}</div>
+                  <div className="mt-1 text-sm text-slate-400">{opt.teacherName}</div>
+                </button>
+              ))}
+            </div>
           </Card>
         ) : (
+          // Крок 2: Вибір варіанту
           <Card>
             <Title>Оберіть свій варіант</Title>
             <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-slate-700">
-              Учень: <strong>{fullName}</strong> · Клас: <strong>{classId}</strong> · Предмет: <strong>{selectedSubject}</strong>
+              Учень: <strong>{fullName}</strong> · Клас: <strong>{classId}</strong>
+              · Предмет: <strong>{selectedOption.subject}</strong>
+              · <strong>{selectedOption.teacherName}</strong>
             </div>
             <div className="mt-6 grid gap-4 grid-cols-2">
               <button
@@ -218,13 +169,14 @@ function VariantContent() {
               </button>
             </div>
             <button
-              onClick={() => setSelectedSubject(null)}
+              onClick={() => setSelectedOption(null)}
               className="mt-4 w-full rounded-2xl border border-slate-200 py-3 text-sm text-slate-500 hover:bg-slate-50"
             >
               ← Змінити предмет
             </button>
           </Card>
         )}
+
       </div>
     </PageContainer>
   );
