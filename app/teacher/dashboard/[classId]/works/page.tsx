@@ -338,6 +338,12 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                         >
                           Редагувати
                         </button>
+                        <button
+                          onClick={() => window.open(`/teacher/print-work?classId=${numericClassId}&variant=${work.variant}&subject=${encodeURIComponent(work.subject)}`, '_blank')}
+                          className="rounded-xl border border-slate-300 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
+                        >
+                          Друк
+                        </button>
                         {allClasses.length > 0 && (
                           <button
                             onClick={() => { setCopyingWork(work); setCopyTargetClass(String(allClasses[0])); setCopyError(''); setCopySuccess(''); }}
