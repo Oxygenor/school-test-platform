@@ -20,6 +20,8 @@ interface StudentSession {
   started_at: string;
   blocked_at: string | null;
   block_reason: string | null;
+  score: number | null;
+  answers: Record<number, string> | null;
 }
 
 interface DbWork {
@@ -51,11 +53,9 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
   const [loading, setLoading] = useState(true);
   const [unlocking, setUnlocking] = useState<string | null>(null);
 
-  // Журнал виходів
   const [journalStudent, setJournalStudent] = useState<StudentSession | null>(null);
-
-  // Перегляд завдань
   const [tasksStudent, setTasksStudent] = useState<StudentSession | null>(null);
+  const [answersStudent, setAnswersStudent] = useState<StudentSession | null>(null);
   const [works, setWorks] = useState<DbWork[]>([]);
 
   useEffect(() => {
@@ -178,6 +178,7 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
                     <th className="px-3 py-3">Предмет</th>
                     <th className="px-3 py-3">Варіант</th>
                     <th className="px-3 py-3">Статус</th>
+                    <th className="px-3 py-3">Оцінка</th>
                     <th className="px-3 py-3">Початок</th>
                     <th className="px-3 py-3">Виходи</th>
                     <th className="px-3 py-3">Причина</th>
@@ -202,6 +203,15 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
                               <span className="text-xs text-red-500">заблок. {blockedMins} хв</span>
                             )}
                           </div>
+                        </td>
+                        <td className="px-3 py-3">
+                          {student.score !== null && student.score !== undefined ? (
+                            <span className={`font-bold ${student.score >= 90 ? 'text-green-600' : student.score >= 60 ? 'text-orange-500' : 'text-red-600'}`}>
+                              {student.score}%
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
                         </td>
                         <td className="px-3 py-3 text-slate-500">{formatDateTime(student.started_at)}</td>
                         <td className="px-3 py-3">
@@ -229,6 +239,14 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
                                 >
                                   Завдання
                                 </button>
+                                {student.answers && (
+                                  <button
+                                    onClick={() => setAnswersStudent(student)}
+                                    className="rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100"
+                                  >
+                                    Відповіді
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => window.open(`/teacher/print?sessionId=${student.id}`, '_blank')}
                                   className="rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100"
@@ -292,6 +310,67 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
           </div>
         </div>
       )}
+
+      {/* Модаль: Відповіді учня */}
+      {answersStudent && (() => {
+        const work = getStudentWork(answersStudent);
+        const CHOICE_LABELS = ['А', 'Б', 'В', 'Г', 'Д', 'Е'];
+        return (
+          <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/70 p-4 pt-8" onClick={() => setAnswersStudent(null)}>
+            <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-bold">Відповіді — {answersStudent.full_name}</h2>
+                <button onClick={() => setAnswersStudent(null)} className="text-2xl leading-none text-slate-400 hover:text-slate-700">×</button>
+              </div>
+              <div className="mb-4 flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                <span>{answersStudent.subject} · Варіант {answersStudent.variant}</span>
+                {answersStudent.score !== null && answersStudent.score !== undefined && (
+                  <span className={`font-bold text-base ${answersStudent.score >= 90 ? 'text-green-600' : answersStudent.score >= 60 ? 'text-orange-500' : 'text-red-600'}`}>
+                    {answersStudent.score}%
+                  </span>
+                )}
+              </div>
+              {!work ? (
+                <p className="text-slate-400">Роботу не знайдено в базі.</p>
+              ) : (
+                <div className="space-y-2">
+                  {work.tasks.map((task, i) => {
+                    const taskObj = typeof task === 'string' ? null : task as { text: string; choices?: string[]; correctChoice?: number };
+                    const correctLabel = taskObj?.correctChoice !== undefined && taskObj?.choices
+                      ? CHOICE_LABELS[taskObj.correctChoice] ?? null
+                      : null;
+                    const studentAnswer = (answersStudent.answers ?? {})[i + 1];
+                    const isCorrect = correctLabel !== null && studentAnswer === correctLabel;
+                    const isWrong = correctLabel !== null && studentAnswer && studentAnswer !== correctLabel;
+                    return (
+                      <div key={i} className={`flex items-center justify-between rounded-xl px-3 py-2 text-sm ${isCorrect ? 'bg-green-50' : isWrong ? 'bg-red-50' : 'bg-slate-50'}`}>
+                        <span className="font-semibold text-slate-400 mr-2">{i + 1}.</span>
+                        <span className="flex-1 text-slate-700 truncate">{typeof task === 'string' ? task : (task as { text: string }).text}</span>
+                        <div className="ml-3 flex items-center gap-2 shrink-0">
+                          {studentAnswer ? (
+                            <span className={`font-bold ${isCorrect ? 'text-green-600' : isWrong ? 'text-red-600' : 'text-slate-600'}`}>{studentAnswer}</span>
+                          ) : (
+                            <span className="text-slate-300">—</span>
+                          )}
+                          {correctLabel && (
+                            <>
+                              {isCorrect ? (
+                                <span className="text-green-600">✓</span>
+                              ) : (
+                                <span className="text-slate-400 text-xs">({correctLabel})</span>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Модаль: Завдання учня */}
       {tasksStudent && (() => {

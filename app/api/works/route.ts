@@ -24,7 +24,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const { teacherPassword, classId, variant, subject, workType, title, durationMinutes, tasks } =
+  const { teacherPassword, classId, variant, subject, workType, title, durationMinutes, tasks, onlineMode } =
     await req.json();
 
   if (teacherPassword !== process.env.TEACHER_LOGIN_PASSWORD) {
@@ -54,6 +54,7 @@ export async function POST(req: Request) {
         title,
         duration_minutes: Number(durationMinutes),
         tasks,
+        online_mode: onlineMode ?? false,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'class_id,variant,subject' }

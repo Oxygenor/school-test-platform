@@ -13,6 +13,8 @@ const WORK_TYPES = [
   'Тематична контрольна робота',
 ];
 
+type StoredTask = string | { text: string; choices: string[]; correctChoice?: number };
+
 interface DbWork {
   id: string;
   class_id: number;
@@ -21,7 +23,15 @@ interface DbWork {
   work_type: string;
   title: string;
   duration_minutes: number;
-  tasks: string[];
+  tasks: StoredTask[];
+  online_mode: boolean;
+}
+
+interface TaskForm {
+  text: string;
+  hasChoices: boolean;
+  choices: string[];
+  correctChoice: number | null;
 }
 
 interface FormState {
@@ -30,7 +40,32 @@ interface FormState {
   workType: string;
   title: string;
   durationMinutes: number;
-  tasks: string[];
+  tasks: TaskForm[];
+  onlineMode: boolean;
+}
+
+const CHOICE_LABELS = ['А', 'Б', 'В', 'Г', 'Д'];
+
+function taskToForm(t: StoredTask): TaskForm {
+  if (typeof t === 'string') return { text: t, hasChoices: false, choices: ['', '', '', ''], correctChoice: null };
+  const choices = [...(t.choices || [])];
+  while (choices.length < 4) choices.push('');
+  return { text: t.text, hasChoices: true, choices, correctChoice: t.correctChoice ?? null };
+}
+
+function formToTask(t: TaskForm): StoredTask {
+  const filtered = t.choices.filter((c) => c.trim());
+  if (t.hasChoices && filtered.length > 0) {
+    const obj: any = { text: t.text, choices: filtered };
+    if (t.correctChoice !== null) obj.correctChoice = t.correctChoice;
+    return obj;
+  }
+  return t.text;
+}
+
+function parseTask(t: StoredTask): { text: string; choices: string[] } {
+  if (typeof t === 'string') return { text: t, choices: [] };
+  return { text: t.text, choices: t.choices || [] };
 }
 
 const emptyForm = (): FormState => ({
@@ -39,7 +74,8 @@ const emptyForm = (): FormState => ({
   workType: 'Самостійна робота',
   title: '',
   durationMinutes: 40,
-  tasks: [''],
+  tasks: [{ text: '', hasChoices: false, choices: ['', '', '', ''], correctChoice: null }],
+  onlineMode: false,
 });
 
 export default function WorksPage({ params }: { params: Promise<{ classId: string }> }) {
@@ -100,7 +136,8 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
       workType: work.work_type,
       title: work.title,
       durationMinutes: work.duration_minutes,
-      tasks: work.tasks.length > 0 ? work.tasks : [''],
+      tasks: work.tasks.length > 0 ? work.tasks.map(taskToForm) : [{ text: '', hasChoices: false, choices: ['', '', '', ''], correctChoice: null }],
+      onlineMode: work.online_mode ?? false,
     });
     setEditingWork(work);
     setSaveError('');
@@ -116,7 +153,9 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
   async function saveWork() {
     if (!form.subject.trim()) { setSaveError('Вкажіть предмет'); return; }
     if (!form.title.trim()) { setSaveError('Введіть назву роботи'); return; }
-    const filteredTasks = form.tasks.filter((t) => t.trim());
+    const filteredTasks = form.tasks
+      .filter((t) => t.text.trim())
+      .map(formToTask);
     if (filteredTasks.length === 0) { setSaveError('Додайте хоча б одне завдання'); return; }
 
     setSaving(true);
@@ -134,6 +173,7 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
         title: form.title,
         durationMinutes: form.durationMinutes,
         tasks: filteredTasks,
+        onlineMode: form.onlineMode,
       }),
     });
 
@@ -186,10 +226,44 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
     if (data.ok) fetchWorks();
   }
 
-  function updateTask(index: number, value: string) {
+  function updateTaskText(index: number, value: string) {
     setForm((prev) => {
       const tasks = [...prev.tasks];
-      tasks[index] = value;
+      tasks[index] = { ...tasks[index], text: value };
+      return { ...prev, tasks };
+    });
+  }
+
+  function toggleTaskChoices(index: number) {
+    setForm((prev) => {
+      const tasks = [...prev.tasks];
+      tasks[index] = { ...tasks[index], hasChoices: !tasks[index].hasChoices };
+      return { ...prev, tasks };
+    });
+  }
+
+  function updateChoice(taskIndex: number, choiceIndex: number, value: string) {
+    setForm((prev) => {
+      const tasks = [...prev.tasks];
+      const choices = [...tasks[taskIndex].choices];
+      choices[choiceIndex] = value;
+      tasks[taskIndex] = { ...tasks[taskIndex], choices };
+      return { ...prev, tasks };
+    });
+  }
+
+  function addChoice(taskIndex: number) {
+    setForm((prev) => {
+      const tasks = [...prev.tasks];
+      tasks[taskIndex] = { ...tasks[taskIndex], choices: [...tasks[taskIndex].choices, ''] };
+      return { ...prev, tasks };
+    });
+  }
+
+  function removeChoice(taskIndex: number, choiceIndex: number) {
+    setForm((prev) => {
+      const tasks = [...prev.tasks];
+      tasks[taskIndex] = { ...tasks[taskIndex], choices: tasks[taskIndex].choices.filter((_, i) => i !== choiceIndex) };
       return { ...prev, tasks };
     });
   }
@@ -279,12 +353,24 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
 
                     {work.tasks.length > 0 && (
                       <div className="mt-4 space-y-2">
-                        {work.tasks.map((task, i) => (
-                          <div key={i} className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                            <span className="font-semibold text-slate-400 mr-2">{i + 1}.</span>
-                            <MathText text={task} />
-                          </div>
-                        ))}
+                        {work.tasks.map((task, i) => {
+                          const { text, choices } = parseTask(task);
+                          return (
+                            <div key={i} className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                              <span className="font-semibold text-slate-400 mr-2">{i + 1}.</span>
+                              <MathText text={text} />
+                              {choices.length > 0 && (
+                                <div className="mt-1 ml-5 flex flex-wrap gap-2">
+                                  {choices.map((c, ci) => (
+                                    <span key={ci} className="rounded-lg bg-white border border-slate-200 px-2 py-0.5 text-xs">
+                                      {CHOICE_LABELS[ci]}) {c}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </Card>
@@ -417,6 +503,22 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                   />
                 </div>
 
+                {/* Онлайн режим */}
+                <div className={`rounded-2xl border p-4 ${form.onlineMode ? 'border-blue-300 bg-blue-50' : 'border-slate-200'}`}>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.onlineMode}
+                      onChange={(e) => setForm((p) => ({ ...p, onlineMode: e.target.checked }))}
+                      className="h-4 w-4 rounded"
+                    />
+                    <div>
+                      <div className="font-medium text-slate-800">Режим онлайн відповідей</div>
+                      <div className="text-xs text-slate-500">Учні вибирають відповіді на платформі, система автоматично виставляє оцінку</div>
+                    </div>
+                  </label>
+                </div>
+
                 {/* Завдання */}
                 <div>
                   <label className="mb-2 block text-sm font-medium text-slate-700">
@@ -425,14 +527,14 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                       (дроби: $\frac{'{2}'}{'{3}'}$, корінь: $\sqrt{'{x}'}$)
                     </span>
                   </label>
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {form.tasks.map((task, i) => (
-                      <div key={i} className="space-y-1">
+                      <div key={i} className="rounded-xl border border-slate-200 p-3 space-y-2">
                         <div className="flex gap-2">
                           <span className="mt-3 text-sm font-semibold text-slate-400 w-5 shrink-0">{i + 1}.</span>
                           <textarea
-                            value={task}
-                            onChange={(e) => updateTask(i, e.target.value)}
+                            value={task.text}
+                            onChange={(e) => updateTaskText(i, e.target.value)}
                             rows={2}
                             placeholder="Текст завдання..."
                             className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-700 resize-none"
@@ -446,17 +548,84 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                             </button>
                           )}
                         </div>
-                        {task.trim() && (
+
+                        {/* Прев'ю */}
+                        {task.text.trim() && (
                           <div className="ml-7 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">
                             <span className="text-xs text-slate-400 mr-1">Прев'ю:</span>
-                            <MathText text={task} />
+                            <MathText text={task.text} />
                           </div>
                         )}
+
+                        {/* Варіанти відповідей */}
+                        <div className="ml-7">
+                          <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-600">
+                            <input
+                              type="checkbox"
+                              checked={task.hasChoices}
+                              onChange={() => toggleTaskChoices(i)}
+                              className="rounded"
+                            />
+                            Варіанти відповідей
+                          </label>
+
+                          {task.hasChoices && (
+                            <div className="mt-2 space-y-2">
+                              {task.choices.map((choice, ci) => (
+                                <div key={ci} className="flex items-center gap-2">
+                                  <span className="text-xs font-bold text-slate-500 w-6">{CHOICE_LABELS[ci] ?? String.fromCharCode(65 + ci)})</span>
+                                  <input
+                                    type="text"
+                                    value={choice}
+                                    onChange={(e) => updateChoice(i, ci, e.target.value)}
+                                    placeholder={`Варіант ${ci + 1}...`}
+                                    className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm outline-none focus:border-slate-700"
+                                  />
+                                  {task.choices.length > 2 && (
+                                    <button onClick={() => removeChoice(i, ci)} className="text-red-400 hover:text-red-600 text-base">×</button>
+                                  )}
+                                </div>
+                              ))}
+                              {task.choices.length < 6 && (
+                                <button
+                                  onClick={() => addChoice(i)}
+                                  className="text-xs text-slate-400 hover:text-slate-600 underline"
+                                >
+                                  + Додати варіант
+                                </button>
+                              )}
+                              {form.onlineMode && task.choices.filter(c => c.trim()).length > 0 && (
+                                <div className="mt-2 pt-2 border-t border-slate-200">
+                                  <p className="text-xs font-medium text-slate-600 mb-1">Правильна відповідь:</p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {task.choices.map((c, ci) => c.trim() ? (
+                                      <button
+                                        key={ci}
+                                        onClick={() => setForm((p) => {
+                                          const tasks = [...p.tasks];
+                                          tasks[i] = { ...tasks[i], correctChoice: task.correctChoice === ci ? null : ci };
+                                          return { ...p, tasks };
+                                        })}
+                                        className={`rounded-lg px-3 py-1 text-xs font-bold transition ${
+                                          task.correctChoice === ci
+                                            ? 'bg-green-500 text-white'
+                                            : 'border border-slate-300 text-slate-600 hover:bg-slate-100'
+                                        }`}
+                                      >
+                                        {CHOICE_LABELS[ci]}) {c}
+                                      </button>
+                                    ) : null)}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
                   <button
-                    onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, ''] }))}
+                    onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, { text: '', hasChoices: false, choices: ['', '', '', ''] }] }))}
                     className="mt-3 rounded-xl border border-dashed border-slate-300 px-4 py-2 text-sm text-slate-500 hover:border-slate-500 hover:text-slate-700 w-full"
                   >
                     + Додати завдання

@@ -15,7 +15,7 @@ function ExamContent() {
   const sessionId = params.get('sessionId');
 
   const [session, setSession] = useState<StudentSession | null>(null);
-  const [dbWork, setDbWork] = useState<{ work_type: string; title: string; duration_minutes: number; tasks: string[] } | null>(null);
+  const [dbWork, setDbWork] = useState<{ work_type: string; title: string; duration_minutes: number; tasks: any[]; online_mode: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
   const [calcOpen, setCalcOpen] = useState(false);
   const [unlockPassword, setUnlockPassword] = useState('');
@@ -27,6 +27,8 @@ function ExamContent() {
   const [finishing, setFinishing] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [fontSize, setFontSize] = useState<'md' | 'lg' | 'xl'>('md');
+  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [scoreResults, setScoreResults] = useState<{ score: number; results: any[] } | null>(null);
 
   const noSleepRef = useRef<any>(null);
   const focusLostCountRef = useRef(0);
@@ -309,12 +311,24 @@ function ExamContent() {
   async function finishWork() {
     if (!sessionId || finishing) return;
     setFinishing(true);
-    await fetch('/api/finish-session', {
+    const res = await fetch('/api/finish-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId }),
+      body: JSON.stringify({
+        sessionId,
+        answers: Object.keys(answers).length > 0 ? answers : undefined,
+        classId: session?.class_id,
+        variant: session?.variant,
+        subject: session?.subject,
+      }),
     });
-    router.push('/');
+    const data = await res.json();
+    if (data.score !== null && data.score !== undefined) {
+      setScoreResults({ score: data.score, results: data.results || [] });
+      setFinishConfirm(false);
+    } else {
+      router.push('/');
+    }
   }
 
   if (loading) {
@@ -396,28 +410,57 @@ function ExamContent() {
 
         {/* Завдання */}
         <div className="mt-4 space-y-4 md:mt-8 md:space-y-5">
-          {work.tasks.map((task, index) => (
-            <div
-              key={index}
-              className={`rounded-2xl border p-4 shadow-sm md:rounded-3xl md:p-6 transition-colors ${dark ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'}`}
-            >
-              <div className="space-y-3 md:space-y-4">
-                <div className={`flex h-10 w-10 items-center justify-center rounded-xl text-base font-bold text-white md:h-12 md:w-12 md:rounded-2xl md:text-lg ${dark ? 'bg-slate-600' : 'bg-slate-900'}`}>
-                  {index + 1}
-                </div>
-                <div>
-                  <div className={`w-full rounded-xl px-4 py-3 md:rounded-2xl md:px-5 md:py-4 ${dark ? 'bg-slate-700 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
-                    <div className={`font-serif ${fontSizeClass}`}>
-                      <MathText text={task} />
-                    </div>
+          {work.tasks.map((task: any, index: number) => {
+            const taskText = typeof task === 'string' ? task : task.text;
+            const choices: string[] = typeof task === 'string' ? [] : (task.choices || []);
+            const choiceLabels = ['А', 'Б', 'В', 'Г', 'Д', 'Е'];
+            return (
+              <div
+                key={index}
+                className={`rounded-2xl border p-4 shadow-sm md:rounded-3xl md:p-6 transition-colors ${dark ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'}`}
+              >
+                <div className="space-y-3 md:space-y-4">
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-xl text-base font-bold text-white md:h-12 md:w-12 md:rounded-2xl md:text-lg ${dark ? 'bg-slate-600' : 'bg-slate-900'}`}>
+                    {index + 1}
                   </div>
-                  <div className={`mt-3 rounded-xl border border-dashed p-3 text-xs md:rounded-2xl md:p-4 md:text-sm ${dark ? 'border-slate-600 bg-slate-800 text-slate-500' : 'border-slate-300 bg-white text-slate-500'}`}>
-                    Відповідь виконується на паперовому аркуші.
+                  <div>
+                    <div className={`w-full rounded-xl px-4 py-3 md:rounded-2xl md:px-5 md:py-4 ${dark ? 'bg-slate-700 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
+                      <div className={`font-serif ${fontSizeClass}`}>
+                        <MathText text={taskText} />
+                      </div>
+                      {choices.length > 0 && (
+                        <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+                          {choices.map((c: string, ci: number) => {
+                            const label = choiceLabels[ci] ?? String.fromCharCode(65 + ci);
+                            const isSelected = answers[index] === label;
+                            const isOnline = dbWork?.online_mode;
+                            return (
+                              <div
+                                key={ci}
+                                onClick={() => isOnline ? setAnswers((prev) => ({ ...prev, [index]: isSelected ? '' : label })) : undefined}
+                                className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${isOnline ? 'cursor-pointer' : ''} ${
+                                  isSelected
+                                    ? 'border-blue-500 bg-blue-500 text-white'
+                                    : dark
+                                      ? 'border-slate-500 bg-slate-600 text-slate-200 hover:bg-slate-500'
+                                      : 'border-slate-300 bg-white text-slate-800 hover:bg-slate-100'
+                                }`}
+                              >
+                                <span className="font-bold mr-1">{label})</span>{c}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                    <div className={`mt-3 rounded-xl border border-dashed p-3 text-xs md:rounded-2xl md:p-4 md:text-sm ${dark ? 'border-slate-600 bg-slate-800 text-slate-500' : 'border-slate-300 bg-white text-slate-500'}`}>
+                      Відповідь виконується на паперовому аркуші.
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Кнопка завершення */}
@@ -466,6 +509,42 @@ function ExamContent() {
                 {finishing ? 'Завершення...' : 'Так, здати'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Результати після здачі */}
+      {scoreResults && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/90 p-4 pt-8">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="text-center mb-6">
+              <div className="text-5xl mb-3">{scoreResults.score >= 90 ? '🏆' : scoreResults.score >= 60 ? '👍' : '📝'}</div>
+              <div className="text-3xl font-bold">{scoreResults.score}%</div>
+              <p className="mt-2 text-slate-500">
+                {scoreResults.results.filter((r: any) => r.isCorrect).length} з {scoreResults.results.filter((r: any) => r.correctAnswer !== null).length} правильно
+              </p>
+            </div>
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {scoreResults.results.map((r: any, i: number) => {
+                if (r.correctAnswer === null) return null;
+                return (
+                  <div key={i} className={`rounded-xl p-3 text-sm flex items-center justify-between ${r.isCorrect ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                    <span className="font-medium text-slate-700">Завдання {r.taskIndex + 1}</span>
+                    <div className="flex items-center gap-3 text-xs">
+                      <span className="text-slate-500">Ваша: <strong>{r.answer || '—'}</strong></span>
+                      {!r.isCorrect && <span className="text-green-700">Правильна: <strong>{r.correctAnswer}</strong></span>}
+                      <span className={r.isCorrect ? 'text-green-600 text-base' : 'text-red-500 text-base'}>{r.isCorrect ? '✓' : '✗'}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <button
+              onClick={() => { localStorage.removeItem('studentSessionId'); router.replace('/'); }}
+              className="mt-6 w-full rounded-2xl bg-slate-900 py-3 text-white font-semibold hover:bg-slate-700"
+            >
+              Вийти
+            </button>
           </div>
         </div>
       )}
