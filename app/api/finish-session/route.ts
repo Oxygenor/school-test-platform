@@ -39,9 +39,9 @@ export async function POST(req: Request) {
         const pts = task.points ?? 1;
         maxPoints += pts;
         const correctLabel = CHOICE_LABELS[task.correctChoice];
-        const isCorrect = answers[i + 1] === correctLabel;
+        const isCorrect = answers[i] === correctLabel;
         if (isCorrect) earnedPoints += pts;
-        return { taskIndex: i, answer: answers[i + 1] ?? null, correctAnswer: correctLabel, isCorrect, points: pts };
+        return { taskIndex: i, answer: answers[i] ?? null, correctAnswer: correctLabel, isCorrect, points: pts };
       });
 
       if (maxPoints > 0) {

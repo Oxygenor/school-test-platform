@@ -351,7 +351,7 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
                       ? CHOICE_LABELS[taskObj.correctChoice] ?? null
                       : null;
                     const taskPoints = taskObj?.points ?? 1;
-                    const studentAnswer = (answersStudent.answers ?? {})[i + 1];
+                    const studentAnswer = (answersStudent.answers ?? {})[i];
                     const isCorrect = correctLabel !== null && studentAnswer === correctLabel;
                     const isWrong = correctLabel !== null && studentAnswer && studentAnswer !== correctLabel;
                     return (
@@ -406,7 +406,7 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
                   <div className="space-y-2">
                     {work.tasks.map((task, i) => (
                       <div key={i} className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                        <span className="font-semibold text-slate-400 mr-2">{i + 1}.</span>{task}
+                        <span className="font-semibold text-slate-400 mr-2">{i + 1}.</span>{typeof task === 'string' ? task : (task as any).text}
                       </div>
                     ))}
                   </div>

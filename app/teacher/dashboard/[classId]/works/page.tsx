@@ -61,7 +61,10 @@ function formToTask(t: TaskForm): StoredTask {
     if (t.correctChoice !== null) obj.correctChoice = t.correctChoice;
     return obj;
   }
-  return { text: t.text, choices: [], points: t.points };
+  if (t.points !== 1) {
+    return { text: t.text, choices: [], points: t.points };
+  }
+  return t.text;
 }
 
 function parseTask(t: StoredTask): { text: string; choices: string[] } {
