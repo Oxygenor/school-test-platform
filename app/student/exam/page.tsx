@@ -192,9 +192,14 @@ function ExamContent() {
   }, [sessionId, session?.status]);
 
   // Polling під час написання: повідомлення від вчителя + extra_minutes
+  const sessionRef = useRef<StudentSession | null>(null);
+  useEffect(() => { sessionRef.current = session; }, [session]);
+
   useEffect(() => {
-    if (!sessionId || !session || session.status !== 'writing') return;
+    if (!sessionId) return;
     const interval = setInterval(async () => {
+      const current = sessionRef.current;
+      if (!current || current.status !== 'writing') return;
       const res = await fetch(`/api/get-session?sessionId=${sessionId}`);
       const data = await res.json();
       if (!data.ok) return;
@@ -202,7 +207,6 @@ function ExamContent() {
       // Повідомлення від вчителя
       if (s.teacher_message) {
         setTeacherMessage(s.teacher_message);
-        // Очищаємо повідомлення щоб не показувати повторно
         fetch('/api/clear-message', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -210,12 +214,12 @@ function ExamContent() {
         });
       }
       // Додатковий час
-      if (s.extra_minutes !== session.extra_minutes) {
+      if (s.extra_minutes !== current.extra_minutes) {
         setSession((prev) => prev ? { ...prev, extra_minutes: s.extra_minutes } : prev);
       }
-    }, 8000);
+    }, 3000);
     return () => clearInterval(interval);
-  }, [sessionId, session?.status, session?.extra_minutes]);
+  }, [sessionId]);
 
   // Polling: вчитель завершив роботу для всіх
   useEffect(() => {
