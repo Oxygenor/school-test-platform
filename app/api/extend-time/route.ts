@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     .eq('id', sessionId)
     .single();
 
-  const current = data?.extra_minutes ?? 0;
+  const current = (data?.extra_minutes as number) ?? 0;
 
   const { error } = await supabaseAdmin
     .from('student_sessions')
