@@ -39,7 +39,7 @@ export async function POST(req: Request) {
   const { error } = await supabaseAdmin
     .from('teacher_exam_status')
     .upsert(
-      { teacher_id: teacher.id, class_id: Number(classId), exam_active: active, updated_at: new Date().toISOString() },
+      { teacher_id: teacher.id, class_id: Number(classId), exam_active: active },
       { onConflict: 'teacher_id,class_id' }
     );
 
