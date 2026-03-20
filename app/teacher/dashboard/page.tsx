@@ -5,8 +5,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Card, PageContainer, Title } from '@/components/ui';
 
-const CLASS_IDS = [6, 7, 10];
-
 interface ClassStatus {
   classId: number;
   active: boolean;
@@ -15,10 +13,11 @@ interface ClassStatus {
 
 export default function TeacherDashboardPage() {
   const router = useRouter();
-  const [statuses, setStatuses] = useState<ClassStatus[]>(
-    CLASS_IDS.map((id) => ({ classId: id, active: false, loading: true }))
-  );
+  const [statuses, setStatuses] = useState<ClassStatus[]>([]);
   const [password, setPassword] = useState('');
+  const [newClassId, setNewClassId] = useState('');
+  const [addError, setAddError] = useState('');
+  const [addLoading, setAddLoading] = useState(false);
 
   useEffect(() => {
     const saved = sessionStorage.getItem('teacherPassword');
@@ -27,15 +26,19 @@ export default function TeacherDashboardPage() {
       return;
     }
     setPassword(saved);
-    loadStatuses();
+    loadClasses(saved);
   }, []);
 
-  async function loadStatuses() {
+  async function loadClasses(pwd: string) {
+    const res = await fetch('/api/classes');
+    const data = await res.json();
+    if (!data.ok) return;
+
     const results = await Promise.all(
-      CLASS_IDS.map(async (classId) => {
-        const res = await fetch(`/api/exam-status?classId=${classId}`);
-        const data = await res.json();
-        return { classId, active: data.active ?? false, loading: false };
+      data.classes.map(async (classId: number) => {
+        const r = await fetch(`/api/exam-status?classId=${classId}`);
+        const d = await r.json();
+        return { classId, active: d.active ?? false, loading: false };
       })
     );
     setStatuses(results);
@@ -63,6 +66,48 @@ export default function TeacherDashboardPage() {
     );
   }
 
+  async function addClass() {
+    setAddError('');
+    const id = Number(newClassId);
+    if (!id || id < 1 || id > 12) {
+      setAddError('Введіть номер від 1 до 12');
+      return;
+    }
+    if (statuses.some((s) => s.classId === id)) {
+      setAddError('Цей клас вже є');
+      return;
+    }
+
+    setAddLoading(true);
+    const res = await fetch('/api/classes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ classId: id, teacherPassword: password }),
+    });
+    const data = await res.json();
+    setAddLoading(false);
+
+    if (!data.ok) {
+      setAddError(data.error ?? 'Помилка');
+      return;
+    }
+
+    setNewClassId('');
+    setStatuses((prev) => [...prev, { classId: id, active: false, loading: false }].sort((a, b) => a.classId - b.classId));
+  }
+
+  async function deleteClass(classId: number) {
+    if (!confirm(`Видалити ${classId} клас? Всі дані будуть втрачені.`)) return;
+
+    await fetch('/api/classes', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ classId, teacherPassword: password }),
+    });
+
+    setStatuses((prev) => prev.filter((s) => s.classId !== classId));
+  }
+
   function logout() {
     sessionStorage.removeItem('teacherPassword');
     router.push('/teacher/login');
@@ -82,15 +127,39 @@ export default function TeacherDashboardPage() {
           </button>
         </div>
 
+        {/* Додати клас */}
+        <Card>
+          <p className="mb-3 font-medium text-slate-700">Додати клас</p>
+          <div className="flex gap-3">
+            <input
+              type="number"
+              min={1}
+              max={12}
+              value={newClassId}
+              onChange={(e) => { setNewClassId(e.target.value); setAddError(''); }}
+              onKeyDown={(e) => e.key === 'Enter' && addClass()}
+              placeholder="Номер класу"
+              className="w-40 rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-700"
+            />
+            <button
+              onClick={addClass}
+              disabled={addLoading}
+              className="rounded-2xl bg-slate-900 px-5 py-3 text-sm text-white hover:bg-slate-700 disabled:opacity-50"
+            >
+              {addLoading ? '...' : 'Додати'}
+            </button>
+          </div>
+          {addError && <p className="mt-2 text-sm text-red-600">{addError}</p>}
+        </Card>
+
+        {/* Класи */}
         <div className="grid gap-4 md:grid-cols-3">
           {statuses.map(({ classId, active, loading }) => (
             <Card key={classId}>
               <div className="flex items-center justify-between">
                 <span className="text-2xl font-bold">{classId} клас</span>
                 <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                  active
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-slate-100 text-slate-500'
+                  active ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'
                 }`}>
                   {active ? 'Активно' : 'Вимкнено'}
                 </span>
@@ -121,6 +190,12 @@ export default function TeacherDashboardPage() {
                 >
                   Керувати роботами
                 </Link>
+                <button
+                  onClick={() => deleteClass(classId)}
+                  className="w-full rounded-2xl border border-red-200 py-3 text-center text-sm font-medium text-red-500 hover:bg-red-50"
+                >
+                  Видалити клас
+                </button>
               </div>
             </Card>
           ))}

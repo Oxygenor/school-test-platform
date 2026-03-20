@@ -5,10 +5,6 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const classId = Number(searchParams.get('classId'));
 
-  if (![6, 7, 10].includes(classId)) {
-    return NextResponse.json({ ok: false, error: 'Некоректний клас' }, { status: 400 });
-  }
-
   const { data, error } = await supabaseAdmin
     .from('class_settings')
     .select('exam_active')
@@ -27,10 +23,6 @@ export async function POST(req: Request) {
 
   if (teacherPassword !== process.env.TEACHER_LOGIN_PASSWORD) {
     return NextResponse.json({ ok: false, error: 'Невірний пароль' }, { status: 401 });
-  }
-
-  if (![6, 7, 10].includes(Number(classId))) {
-    return NextResponse.json({ ok: false, error: 'Некоректний клас' }, { status: 400 });
   }
 
   const { error } = await supabaseAdmin
