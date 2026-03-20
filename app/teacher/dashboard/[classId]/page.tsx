@@ -70,7 +70,7 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
   const [extendSending, setExtendSending] = useState(false);
 
   useEffect(() => {
-    const saved = sessionStorage.getItem('teacherPassword');
+    const saved = sessionStorage.getItem('teacherToken');
     if (!saved) { router.replace('/teacher/login'); return; }
     fetchStudents();
     const interval = setInterval(fetchStudents, 5000);
@@ -95,13 +95,13 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
   }
 
   async function unlockStudent(sessionId: string) {
-    const password = sessionStorage.getItem('teacherPassword');
-    if (!password) return;
+    const token = sessionStorage.getItem('teacherToken');
+    if (!token) return;
     setUnlocking(sessionId);
     await fetch('/api/unlock-session', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId, unlockPassword: password }),
+      headers: { 'Content-Type': 'application/json', 'x-teacher-token': token },
+      body: JSON.stringify({ sessionId }),
     });
     setUnlocking(null);
     fetchStudents();
@@ -118,11 +118,11 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
 
   async function sendMessage() {
     if (!msgStudent || !msgText.trim()) return;
-    const password = sessionStorage.getItem('teacherPassword');
+    const token = sessionStorage.getItem('teacherToken');
     setMsgSending(true);
     await fetch('/api/send-message', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-teacher-password': password || '' },
+      headers: { 'Content-Type': 'application/json', 'x-teacher-token': token || '' },
       body: JSON.stringify({ sessionId: msgStudent.id, message: msgText.trim() }),
     });
     setMsgSending(false);
@@ -132,11 +132,11 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
 
   async function extendTime() {
     if (!extendStudent) return;
-    const password = sessionStorage.getItem('teacherPassword');
+    const token = sessionStorage.getItem('teacherToken');
     setExtendSending(true);
     await fetch('/api/extend-time', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-teacher-password': password || '' },
+      headers: { 'Content-Type': 'application/json', 'x-teacher-token': token || '' },
       body: JSON.stringify({ sessionId: extendStudent.id, minutes: Number(extendMinutes) }),
     });
     setExtendSending(false);

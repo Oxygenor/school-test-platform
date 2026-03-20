@@ -1,5 +1,16 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { requireTeacher } from '@/lib/teacher-auth';
+
+// Перевіряємо що вчитель є власником класу
+async function verifyClassOwner(classId: number, teacherId: string): Promise<boolean> {
+  const { data } = await supabaseAdmin
+    .from('classes')
+    .select('teacher_id')
+    .eq('id', classId)
+    .single();
+  return data?.teacher_id === teacherId;
+}
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -24,23 +35,25 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const { teacherPassword, classId, variant, subject, workType, title, durationMinutes, tasks, onlineMode } =
-    await req.json();
-
-  if (teacherPassword !== process.env.TEACHER_LOGIN_PASSWORD) {
-    return NextResponse.json({ ok: false, error: 'Невірний пароль' }, { status: 401 });
+  const teacher = await requireTeacher(req);
+  if (!teacher) {
+    return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
   }
+
+  const { classId, variant, subject, workType, title, durationMinutes, tasks, onlineMode } =
+    await req.json();
 
   if (!classId) {
     return NextResponse.json({ ok: false, error: 'Некоректний клас' }, { status: 400 });
   }
-
   if (![1, 2].includes(Number(variant))) {
     return NextResponse.json({ ok: false, error: 'Некоректний варіант' }, { status: 400 });
   }
-
   if (!subject?.trim()) {
     return NextResponse.json({ ok: false, error: 'Вкажіть предмет' }, { status: 400 });
+  }
+  if (!(await verifyClassOwner(Number(classId), teacher.id))) {
+    return NextResponse.json({ ok: false, error: 'Немає доступу до цього класу' }, { status: 403 });
   }
 
   const { data, error } = await supabaseAdmin
@@ -55,6 +68,7 @@ export async function POST(req: Request) {
         duration_minutes: Number(durationMinutes),
         tasks,
         online_mode: onlineMode ?? false,
+        teacher_id: teacher.id,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'class_id,variant,subject' }
@@ -70,14 +84,18 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const teacher = await requireTeacher(req);
+  if (!teacher) {
+    return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { searchParams } = new URL(req.url);
   const classId = Number(searchParams.get('classId'));
   const variant = Number(searchParams.get('variant'));
   const subject = searchParams.get('subject') || '';
-  const teacherPassword = searchParams.get('teacherPassword');
 
-  if (teacherPassword !== process.env.TEACHER_LOGIN_PASSWORD) {
-    return NextResponse.json({ ok: false, error: 'Невірний пароль' }, { status: 401 });
+  if (!(await verifyClassOwner(classId, teacher.id))) {
+    return NextResponse.json({ ok: false, error: 'Немає доступу' }, { status: 403 });
   }
 
   const query = supabaseAdmin
@@ -89,7 +107,6 @@ export async function DELETE(req: Request) {
   if (subject) query.eq('subject', subject);
 
   const { error } = await query;
-
   if (error) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }

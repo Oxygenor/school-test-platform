@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { requireTeacher } from '@/lib/teacher-auth';
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -7,6 +8,22 @@ export async function GET(req: Request) {
 
   if (!classId) {
     return NextResponse.json({ ok: false, error: 'Некоректний клас' }, { status: 400 });
+  }
+
+  const teacher = await requireTeacher(req);
+  if (!teacher) {
+    return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Перевіряємо що вчитель є власником класу
+  const { data: cls } = await supabaseAdmin
+    .from('classes')
+    .select('teacher_id')
+    .eq('id', classId)
+    .single();
+
+  if (!cls || cls.teacher_id !== teacher.id) {
+    return NextResponse.json({ ok: false, error: 'Немає доступу' }, { status: 403 });
   }
 
   const { data: students, error } = await supabaseAdmin

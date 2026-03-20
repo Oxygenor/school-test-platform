@@ -89,7 +89,7 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
 
   const [works, setWorks] = useState<DbWork[]>([]);
   const [loading, setLoading] = useState(true);
-  const [password, setPassword] = useState('');
+  const [token, setToken] = useState('');
   const [allClasses, setAllClasses] = useState<number[]>([]);
 
   // Копіювання
@@ -106,16 +106,18 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   useEffect(() => {
-    const saved = sessionStorage.getItem('teacherPassword');
+    const saved = sessionStorage.getItem('teacherToken');
     if (!saved) {
       router.replace('/teacher/login');
       return;
     }
-    setPassword(saved);
+    setToken(saved);
     fetchWorks();
-    fetch('/api/classes').then((r) => r.json()).then((d) => {
-      if (d.ok) setAllClasses(d.classes.filter((c: number) => c !== numericClassId));
-    });
+    fetch('/api/classes', { headers: { 'x-teacher-token': saved } })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.ok) setAllClasses(d.classes.filter((c: number) => c !== numericClassId));
+      });
   }, []);
 
   async function fetchWorks() {
@@ -167,9 +169,8 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
 
     const res = await fetch('/api/works', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-teacher-token': token },
       body: JSON.stringify({
-        teacherPassword: password,
         classId: numericClassId,
         variant: form.variant,
         subject: form.subject,
@@ -201,9 +202,8 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
     setCopySuccess('');
     const res = await fetch('/api/works', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-teacher-token': token },
       body: JSON.stringify({
-        teacherPassword: password,
         classId: Number(copyTargetClass),
         variant: copyingWork.variant,
         subject: copyingWork.subject,
@@ -223,8 +223,8 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
   async function deleteWork(work: DbWork) {
     if (!confirm(`Видалити роботу "${work.title}"?`)) return;
     const res = await fetch(
-      `/api/works?classId=${numericClassId}&variant=${work.variant}&subject=${encodeURIComponent(work.subject)}&teacherPassword=${encodeURIComponent(password)}`,
-      { method: 'DELETE' }
+      `/api/works?classId=${numericClassId}&variant=${work.variant}&subject=${encodeURIComponent(work.subject)}`,
+      { method: 'DELETE', headers: { 'x-teacher-token': token } }
     );
     const data = await res.json();
     if (data.ok) fetchWorks();

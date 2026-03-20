@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { requireTeacher } from '@/lib/teacher-auth';
 
 export async function POST(req: Request) {
-  const password = req.headers.get('x-teacher-password');
-  if (password !== process.env.TEACHER_LOGIN_PASSWORD) {
+  const teacher = await requireTeacher(req);
+  if (!teacher) {
     return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
   }
 

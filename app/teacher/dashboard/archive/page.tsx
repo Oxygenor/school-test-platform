@@ -37,7 +37,7 @@ export default function ArchivePage() {
   const [classes, setClasses] = useState<number[]>([]);
 
   useEffect(() => {
-    const saved = sessionStorage.getItem('teacherPassword');
+    const saved = sessionStorage.getItem('teacherToken');
     if (!saved) { router.replace('/teacher/login'); return; }
     fetch('/api/classes').then((r) => r.json()).then((d) => {
       if (d.ok) setClasses(d.classes);
