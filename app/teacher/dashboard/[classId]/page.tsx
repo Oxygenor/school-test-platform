@@ -22,6 +22,7 @@ interface StudentSession {
   block_reason: string | null;
   score: number | null;
   answers: Record<number, string> | null;
+  extra_minutes: number;
 }
 
 interface DbWork {
@@ -57,6 +58,16 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
   const [tasksStudent, setTasksStudent] = useState<StudentSession | null>(null);
   const [answersStudent, setAnswersStudent] = useState<StudentSession | null>(null);
   const [works, setWorks] = useState<DbWork[]>([]);
+
+  // Повідомлення учню
+  const [msgStudent, setMsgStudent] = useState<StudentSession | null>(null);
+  const [msgText, setMsgText] = useState('');
+  const [msgSending, setMsgSending] = useState(false);
+
+  // Додати час
+  const [extendStudent, setExtendStudent] = useState<StudentSession | null>(null);
+  const [extendMinutes, setExtendMinutes] = useState('5');
+  const [extendSending, setExtendSending] = useState(false);
 
   useEffect(() => {
     const saved = sessionStorage.getItem('teacherPassword');
@@ -105,10 +116,44 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
     fetchStudents();
   }
 
+  async function sendMessage() {
+    if (!msgStudent || !msgText.trim()) return;
+    const password = sessionStorage.getItem('teacherPassword');
+    setMsgSending(true);
+    await fetch('/api/send-message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-teacher-password': password || '' },
+      body: JSON.stringify({ sessionId: msgStudent.id, message: msgText.trim() }),
+    });
+    setMsgSending(false);
+    setMsgStudent(null);
+    setMsgText('');
+  }
+
+  async function extendTime() {
+    if (!extendStudent) return;
+    const password = sessionStorage.getItem('teacherPassword');
+    setExtendSending(true);
+    await fetch('/api/extend-time', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-teacher-password': password || '' },
+      body: JSON.stringify({ sessionId: extendStudent.id, minutes: Number(extendMinutes) }),
+    });
+    setExtendSending(false);
+    setExtendStudent(null);
+    fetchStudents();
+  }
+
+  function isSuspicious(studentId: string): boolean {
+    const exits = exitCountMap[studentId] || 0;
+    const logs = exitLogMap[studentId] || [];
+    return exits > 2 || logs.some(l => l.durationSeconds >= 7);
+  }
+
   const writingCount = students.filter((s) => s.status === 'writing').length;
   const blockedCount = students.filter((s) => s.status === 'blocked').length;
   const finishedCount = students.filter((s) => s.status === 'finished').length;
-  const violationsCount = students.filter((s) => (exitCountMap[s.id] || 0) > 0).length;
+  const suspiciousCount = students.filter((s) => isSuspicious(s.id)).length;
 
   function getStudentWork(s: StudentSession) {
     return works.find((w) => w.variant === s.variant && w.subject === s.subject) ?? null;
@@ -163,8 +208,8 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
             <div className="mt-2 text-3xl font-bold text-green-600">{finishedCount}</div>
           </Card>
           <Card>
-            <div className="text-sm text-slate-500">З порушеннями</div>
-            <div className="mt-2 text-3xl font-bold text-orange-500">{violationsCount}</div>
+            <div className="text-sm text-slate-500">Підозрілих</div>
+            <div className="mt-2 text-3xl font-bold text-orange-500">{suspiciousCount}</div>
           </Card>
         </div>
 
@@ -193,12 +238,20 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
                 <tbody>
                   {students.map((student) => {
                     const exits = exitCountMap[student.id] || 0;
+                    const suspicious = isSuspicious(student.id);
                     const { label, cls } = statusLabel(student.status);
                     const blockedMins = student.blocked_at ? minutesSince(student.blocked_at) : 0;
 
                     return (
-                      <tr key={student.id} className="border-b border-slate-100 hover:bg-slate-50">
-                        <td className="px-3 py-3 font-medium">{student.full_name}</td>
+                      <tr key={student.id} className={`border-b border-slate-100 hover:bg-slate-50 ${suspicious && student.status === 'writing' ? 'bg-orange-50/40' : ''}`}>
+                        <td className="px-3 py-3 font-medium">
+                          <div className="flex items-center gap-1.5">
+                            {student.full_name}
+                            {suspicious && (
+                              <span title="Підозріла активність" className="text-orange-500 text-base">⚠️</span>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-3 py-3 text-slate-600">{student.subject || '—'}</td>
                         <td className="px-3 py-3">{student.variant}</td>
                         <td className="px-3 py-3">
@@ -206,6 +259,9 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
                             <span className={`w-fit rounded-full px-2 py-0.5 text-xs font-semibold ${cls}`}>{label}</span>
                             {student.status === 'blocked' && blockedMins >= 5 && (
                               <span className="text-xs text-red-500">заблок. {blockedMins} хв</span>
+                            )}
+                            {student.extra_minutes > 0 && (
+                              <span className="text-xs text-blue-500">+{student.extra_minutes} хв</span>
                             )}
                           </div>
                         </td>
@@ -227,7 +283,7 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
                           {exits > 0 ? (
                             <button
                               onClick={() => setJournalStudent(student)}
-                              className="font-semibold text-red-600 underline underline-offset-2"
+                              className={`font-semibold underline underline-offset-2 ${suspicious ? 'text-orange-500' : 'text-red-600'}`}
                             >
                               {exits} раз
                             </button>
@@ -239,7 +295,24 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
                           {student.block_reason || '—'}
                         </td>
                         <td className="px-3 py-3">
-                          <div className="flex gap-1.5">
+                          <div className="flex flex-wrap gap-1.5">
+                            {/* Повідомлення + додати час — тільки для тих хто пише */}
+                            {student.status === 'writing' && (
+                              <>
+                                <button
+                                  onClick={() => { setMsgStudent(student); setMsgText(''); }}
+                                  className="rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-xs text-blue-700 hover:bg-blue-100"
+                                >
+                                  Повідом.
+                                </button>
+                                <button
+                                  onClick={() => { setExtendStudent(student); setExtendMinutes('5'); }}
+                                  className="rounded-lg border border-green-200 bg-green-50 px-2 py-1 text-xs text-green-700 hover:bg-green-100"
+                                >
+                                  +Час
+                                </button>
+                              </>
+                            )}
                             {student.subject && (
                               <>
                                 <button
@@ -287,6 +360,71 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
         </Card>
       </div>
 
+      {/* Модаль: Надіслати повідомлення */}
+      {msgStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4" onClick={() => setMsgStudent(null)}>
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold">Повідомлення для {msgStudent.full_name}</h2>
+              <button onClick={() => setMsgStudent(null)} className="text-2xl leading-none text-slate-400 hover:text-slate-700">×</button>
+            </div>
+            <textarea
+              value={msgText}
+              onChange={(e) => setMsgText(e.target.value)}
+              placeholder="Введіть повідомлення..."
+              rows={4}
+              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-700 resize-none"
+            />
+            <button
+              onClick={sendMessage}
+              disabled={msgSending || !msgText.trim()}
+              className="mt-3 w-full rounded-xl bg-slate-900 py-2.5 text-sm text-white font-semibold disabled:opacity-50"
+            >
+              {msgSending ? 'Надсилання...' : 'Надіслати'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Модаль: Додати час */}
+      {extendStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4" onClick={() => setExtendStudent(null)}>
+          <div className="w-full max-w-xs rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold">Додати час</h2>
+              <button onClick={() => setExtendStudent(null)} className="text-2xl leading-none text-slate-400 hover:text-slate-700">×</button>
+            </div>
+            <p className="mb-3 text-sm text-slate-600">{extendStudent.full_name}</p>
+            <div className="flex gap-2 mb-3">
+              {[5, 10, 15].map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setExtendMinutes(String(m))}
+                  className={`flex-1 rounded-xl py-2 text-sm font-semibold border transition ${extendMinutes === String(m) ? 'bg-slate-900 text-white border-slate-900' : 'border-slate-300 text-slate-700 hover:bg-slate-50'}`}
+                >
+                  {m} хв
+                </button>
+              ))}
+            </div>
+            <input
+              type="number"
+              value={extendMinutes}
+              onChange={(e) => setExtendMinutes(e.target.value)}
+              min={1}
+              max={60}
+              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-700"
+            />
+            <button
+              onClick={extendTime}
+              disabled={extendSending}
+              className="mt-3 w-full rounded-xl bg-green-600 py-2.5 text-sm text-white font-semibold disabled:opacity-50 hover:bg-green-700"
+            >
+              {extendSending ? '...' : `Додати ${extendMinutes} хв`}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Модаль: Журнал виходів */}
       {journalStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4" onClick={() => setJournalStudent(null)}>
@@ -300,7 +438,7 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
             ) : (
               <div className="space-y-2">
                 {(exitLogMap[journalStudent.id] || []).map((log, i) => (
-                  <div key={i} className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 text-sm">
+                  <div key={i} className={`flex items-center justify-between rounded-xl px-4 py-3 text-sm ${log.durationSeconds >= 7 ? 'bg-red-50' : 'bg-slate-50'}`}>
                     <span className="font-medium text-slate-700">Вихід {i + 1}</span>
                     <span className="text-slate-500">{formatDateTime(log.exitedAt)}</span>
                     <span className={`font-semibold ${log.durationSeconds >= 7 ? 'text-red-600' : 'text-orange-500'}`}>

@@ -17,6 +17,8 @@ export interface StudentSession {
   updated_at: string;
   answers: Record<number, string> | null;
   score: number | null;
+  teacher_message: string | null;
+  extra_minutes: number;
 }
 
 export interface WorkItem {

@@ -9,6 +9,17 @@ import Calculator from '@/components/calculator';
 import { MathText } from '@/components/math-text';
 import NoSleep from 'nosleep.js';
 
+const CHOICE_LABELS = ['А', 'Б', 'В', 'Г', 'Д', 'Е'];
+
+function shuffleArray<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 function ExamContent() {
   const router = useRouter();
   const params = useSearchParams();
@@ -24,16 +35,23 @@ function ExamContent() {
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [examEnded, setExamEnded] = useState(false);
   const [finishConfirm, setFinishConfirm] = useState(false);
+  const [skippedWarning, setSkippedWarning] = useState<number[]>([]);
   const [finishing, setFinishing] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [fontSize, setFontSize] = useState<'md' | 'lg' | 'xl'>('md');
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [scoreResults, setScoreResults] = useState<{ score: number; maxScore: number; results: any[] } | null>(null);
+  const [teacherMessage, setTeacherMessage] = useState<string | null>(null);
+
+  // Shuffle order: shuffleOrderRef[taskIndex] = [origIdx0, origIdx1, ...]
+  const shuffleOrderRef = useRef<Record<number, number[]>>({});
 
   const noSleepRef = useRef<any>(null);
   const focusLostCountRef = useRef(0);
+  const exitTimerRef = useRef<any>(null);
+  const exitStartRef = useRef<number | null>(null);
 
-  // Завантажуємо налаштування з localStorage
+  // Налаштування з localStorage
   useEffect(() => {
     const savedTheme = localStorage.getItem('examTheme') as 'light' | 'dark' | null;
     const savedFontSize = localStorage.getItem('examFontSize') as 'md' | 'lg' | 'xl' | null;
@@ -53,31 +71,35 @@ function ExamContent() {
     setFontSize(size);
     localStorage.setItem('examFontSize', size);
   }
-  const exitTimerRef = useRef<any>(null);
-  const exitStartRef = useRef<number | null>(null);
 
   // Заборона перезавантаження
   useEffect(() => {
-    function preventReload(e: any) {
-      e.preventDefault();
-      e.returnValue = '';
-    }
+    function preventReload(e: any) { e.preventDefault(); e.returnValue = ''; }
     window.addEventListener('beforeunload', preventReload);
     return () => window.removeEventListener('beforeunload', preventReload);
   }, []);
 
-  // Заборона копіювання
+  // Заборона копіювання, вставки та клавіатурних скорочень
   useEffect(() => {
     function disableCopy(e: any) { e.preventDefault(); }
+    function blockShortcuts(e: KeyboardEvent) {
+      const blocked = ['c', 'v', 'x', 'a', 'u', 's'];
+      if ((e.ctrlKey || e.metaKey) && blocked.includes(e.key.toLowerCase())) {
+        e.preventDefault();
+      }
+      if (e.key === 'PrintScreen') e.preventDefault();
+    }
     document.addEventListener('copy', disableCopy);
     document.addEventListener('cut', disableCopy);
     document.addEventListener('paste', disableCopy);
     document.addEventListener('contextmenu', disableCopy);
+    document.addEventListener('keydown', blockShortcuts);
     return () => {
       document.removeEventListener('copy', disableCopy);
       document.removeEventListener('cut', disableCopy);
       document.removeEventListener('paste', disableCopy);
       document.removeEventListener('contextmenu', disableCopy);
+      document.removeEventListener('keydown', blockShortcuts);
     };
   }, []);
 
@@ -110,6 +132,19 @@ function ExamContent() {
     loadSession();
   }, [sessionId]);
 
+  // Генеруємо порядок перемішування варіантів відповідей
+  useEffect(() => {
+    if (!dbWork) return;
+    const order: Record<number, number[]> = {};
+    dbWork.tasks.forEach((task: any, i: number) => {
+      const choices: string[] = typeof task === 'string' ? [] : (task.choices || []);
+      if (choices.length > 1) {
+        order[i] = shuffleArray(choices.map((_: any, ci: number) => ci));
+      }
+    });
+    shuffleOrderRef.current = order;
+  }, [dbWork]);
+
   // Блокування кнопки назад
   useEffect(() => {
     window.history.pushState(null, '', window.location.href);
@@ -118,7 +153,7 @@ function ExamContent() {
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
-  // Таймер блокування
+  // Таймер блокування + авто-завершення через 15 хв
   useEffect(() => {
     if (!session || session.status !== 'blocked' || !session.blocked_at) return;
     let autoFinished = false;
@@ -142,7 +177,7 @@ function ExamContent() {
     return () => clearInterval(timer);
   }, [session]);
 
-  // Polling: якщо заблоковано — перевіряємо чи вчитель розблокував
+  // Polling: якщо заблоковано — перевіряємо розблокування
   useEffect(() => {
     if (!sessionId || !session || session.status !== 'blocked') return;
     const interval = setInterval(async () => {
@@ -155,6 +190,32 @@ function ExamContent() {
     }, 4000);
     return () => clearInterval(interval);
   }, [sessionId, session?.status]);
+
+  // Polling під час написання: повідомлення від вчителя + extra_minutes
+  useEffect(() => {
+    if (!sessionId || !session || session.status !== 'writing') return;
+    const interval = setInterval(async () => {
+      const res = await fetch(`/api/get-session?sessionId=${sessionId}`);
+      const data = await res.json();
+      if (!data.ok) return;
+      const s: StudentSession = data.session;
+      // Повідомлення від вчителя
+      if (s.teacher_message) {
+        setTeacherMessage(s.teacher_message);
+        // Очищаємо повідомлення щоб не показувати повторно
+        fetch('/api/clear-message', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId }),
+        });
+      }
+      // Додатковий час
+      if (s.extra_minutes !== session.extra_minutes) {
+        setSession((prev) => prev ? { ...prev, extra_minutes: s.extra_minutes } : prev);
+      }
+    }, 8000);
+    return () => clearInterval(interval);
+  }, [sessionId, session?.status, session?.extra_minutes]);
 
   // Polling: вчитель завершив роботу для всіх
   useEffect(() => {
@@ -181,7 +242,8 @@ function ExamContent() {
 
   useEffect(() => {
     if (!session || !work) return;
-    const endTime = new Date(session.started_at).getTime() + work.durationMinutes * 60 * 1000;
+    const extraMs = (session.extra_minutes ?? 0) * 60 * 1000;
+    const endTime = new Date(session.started_at).getTime() + work.durationMinutes * 60 * 1000 + extraMs;
     let finished = false;
     const update = () => {
       const left = Math.max(0, Math.floor((endTime - Date.now()) / 1000));
@@ -199,7 +261,7 @@ function ExamContent() {
     update();
     const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
-  }, [session, work]);
+  }, [session, work, session?.extra_minutes]);
 
   // Система блокування: макс 3 виходи, кожен не довше 7 секунд
   useEffect(() => {
@@ -211,12 +273,10 @@ function ExamContent() {
       if (alreadyBlocked) return;
       alreadyBlocked = true;
       clearTimeout(exitTimerRef.current);
-
       const blockedAt = new Date().toISOString();
       setSession((prev) =>
         prev ? { ...prev, status: 'blocked', block_reason: reason, blocked_at: blockedAt } : prev
       );
-
       const response = await fetch('/api/block-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -254,22 +314,17 @@ function ExamContent() {
     }
 
     function onVisibilityChange() {
-      if (document.hidden) onHide();
-      else onShow();
+      if (document.hidden) onHide(); else onShow();
     }
-
-    // Спрацьовує коли системний оверлей (Gemini тощо) забирає фокус
     function onWindowBlur() {
-      if (document.hidden) return; // вже обробляється visibilitychange
+      if (document.hidden) return;
       onHide();
     }
-
     function onWindowFocus() {
       if (document.hidden) return;
       onShow();
     }
 
-    // Резервний polling — кожні 2 сек перевіряємо фокус
     const focusPoller = setInterval(() => {
       if (!document.hasFocus() && !document.hidden && exitStartRef.current === null) {
         onHide();
@@ -308,6 +363,21 @@ function ExamContent() {
     setSession(data.session);
   }
 
+  function handleFinishClick() {
+    if (!work || !dbWork?.online_mode) { setFinishConfirm(true); return; }
+    // Перевіряємо пропущені завдання з варіантами відповідей
+    const skipped: number[] = [];
+    work.tasks.forEach((task: any, i: number) => {
+      const choices: string[] = typeof task === 'string' ? [] : (task.choices || []);
+      if (choices.length > 0 && !answers[i]) skipped.push(i + 1);
+    });
+    if (skipped.length > 0) {
+      setSkippedWarning(skipped);
+    } else {
+      setFinishConfirm(true);
+    }
+  }
+
   async function finishWork() {
     if (!sessionId || finishing) return;
     setFinishing(true);
@@ -327,6 +397,7 @@ function ExamContent() {
       setScoreResults({ score: data.score, maxScore: data.maxScore ?? data.score, results: data.results || [] });
       setFinishConfirm(false);
     } else {
+      localStorage.removeItem('studentSessionId');
       router.push('/');
     }
   }
@@ -349,7 +420,6 @@ function ExamContent() {
 
   const dark = theme === 'dark';
   const timerColor = timeLeft !== null && timeLeft < 300 ? 'text-red-500' : dark ? 'text-slate-300' : 'text-slate-700';
-
   const fontSizeClass = fontSize === 'xl' ? 'text-2xl leading-10 md:text-3xl md:leading-[3rem]'
     : fontSize === 'lg' ? 'text-xl leading-9 md:text-2xl md:leading-[2.6rem]'
     : 'text-lg leading-8 md:text-[1.45rem] md:leading-10';
@@ -373,7 +443,6 @@ function ExamContent() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {/* Розмір шрифту */}
             {(['md', 'lg', 'xl'] as const).map((s, i) => (
               <button
                 key={s}
@@ -387,7 +456,6 @@ function ExamContent() {
                 {['A', 'A+', 'A++'][i]}
               </button>
             ))}
-            {/* Тема */}
             <button
               onClick={toggleTheme}
               className={`rounded-xl px-3 py-2 text-xs font-bold md:rounded-2xl md:px-4 md:py-3 border transition ${dark ? 'border-slate-600 text-slate-300' : 'border-slate-300 text-slate-600'}`}
@@ -413,7 +481,7 @@ function ExamContent() {
           {work.tasks.map((task: any, index: number) => {
             const taskText = typeof task === 'string' ? task : task.text;
             const choices: string[] = typeof task === 'string' ? [] : (task.choices || []);
-            const choiceLabels = ['А', 'Б', 'В', 'Г', 'Д', 'Е'];
+            const shuffledIndices = shuffleOrderRef.current[index] ?? choices.map((_: any, ci: number) => ci);
             return (
               <div
                 key={index}
@@ -430,14 +498,15 @@ function ExamContent() {
                       </div>
                       {choices.length > 0 && (
                         <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
-                          {choices.map((c: string, ci: number) => {
-                            const label = choiceLabels[ci] ?? String.fromCharCode(65 + ci);
-                            const isSelected = answers[index] === label;
+                          {shuffledIndices.map((origIdx: number, displayPos: number) => {
+                            const displayLabel = CHOICE_LABELS[displayPos] ?? String.fromCharCode(65 + displayPos);
+                            const origLabel = CHOICE_LABELS[origIdx] ?? String.fromCharCode(65 + origIdx);
+                            const isSelected = answers[index] === origLabel;
                             const isOnline = dbWork?.online_mode;
                             return (
                               <div
-                                key={ci}
-                                onClick={() => isOnline ? setAnswers((prev) => ({ ...prev, [index]: isSelected ? '' : label })) : undefined}
+                                key={displayPos}
+                                onClick={() => isOnline ? setAnswers((prev) => ({ ...prev, [index]: isSelected ? '' : origLabel })) : undefined}
                                 className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${isOnline ? 'cursor-pointer' : ''} ${
                                   isSelected
                                     ? 'border-blue-500 bg-blue-500 text-white'
@@ -446,7 +515,7 @@ function ExamContent() {
                                       : 'border-slate-300 bg-white text-slate-800 hover:bg-slate-100'
                                 }`}
                               >
-                                <span className="font-bold mr-1">{label})</span>{c}
+                                <span className="font-bold mr-1">{displayLabel})</span>{choices[origIdx]}
                               </div>
                             );
                           })}
@@ -466,7 +535,7 @@ function ExamContent() {
         {/* Кнопка завершення */}
         <div className="mt-8 text-center">
           <button
-            onClick={() => setFinishConfirm(true)}
+            onClick={handleFinishClick}
             className="rounded-2xl border-2 border-slate-300 px-6 py-3 text-sm font-semibold text-slate-600 hover:border-slate-500 hover:text-slate-900"
           >
             Завершити роботу
@@ -485,6 +554,34 @@ function ExamContent() {
       >
         🧮
       </button>
+
+      {/* Попередження: пропущені завдання */}
+      {skippedWarning.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl text-center">
+            <div className="text-4xl mb-3">⚠️</div>
+            <div className="text-xl font-bold">Є пропущені завдання</div>
+            <p className="mt-2 text-sm text-slate-600">
+              Ти не відповів на завдання:{' '}
+              <span className="font-semibold text-slate-900">{skippedWarning.join(', ')}</span>
+            </p>
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => setSkippedWarning([])}
+                className="flex-1 rounded-2xl border border-slate-300 py-3 text-slate-700"
+              >
+                Повернутись
+              </button>
+              <button
+                onClick={() => { setSkippedWarning([]); setFinishConfirm(true); }}
+                className="flex-1 rounded-2xl bg-slate-900 py-3 text-white font-semibold"
+              >
+                Все одно здати
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Підтвердження завершення */}
       {finishConfirm && (
@@ -556,14 +653,29 @@ function ExamContent() {
           <div className="w-full max-w-lg rounded-2xl bg-white p-8 shadow-2xl text-center">
             <div className="text-4xl mb-4">✋</div>
             <div className="text-2xl font-bold md:text-3xl">Роботу завершено</div>
-            <p className="mt-4 text-lg text-slate-600">
-              Здаємо листочки вчителю.
-            </p>
+            <p className="mt-4 text-lg text-slate-600">Здаємо листочки вчителю.</p>
             <button
               onClick={() => { localStorage.removeItem('studentSessionId'); router.replace('/'); }}
               className="mt-6 w-full rounded-2xl bg-slate-900 py-3 text-white font-semibold hover:bg-slate-700"
             >
               Вийти
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Повідомлення від вчителя */}
+      {teacherMessage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl text-center">
+            <div className="text-3xl mb-3">📩</div>
+            <div className="text-lg font-bold mb-2">Повідомлення від вчителя</div>
+            <p className="text-slate-800 text-base leading-relaxed">{teacherMessage}</p>
+            <button
+              onClick={() => setTeacherMessage(null)}
+              className="mt-6 w-full rounded-2xl bg-slate-900 py-3 text-white font-semibold"
+            >
+              Зрозумів
             </button>
           </div>
         </div>
