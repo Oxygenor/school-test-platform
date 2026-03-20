@@ -625,7 +625,7 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                     ))}
                   </div>
                   <button
-                    onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, { text: '', hasChoices: false, choices: ['', '', '', ''] }] }))}
+                    onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, { text: '', hasChoices: false, choices: ['', '', '', ''], correctChoice: null }] }))}
                     className="mt-3 rounded-xl border border-dashed border-slate-300 px-4 py-2 text-sm text-slate-500 hover:border-slate-500 hover:text-slate-700 w-full"
                   >
                     + Додати завдання
