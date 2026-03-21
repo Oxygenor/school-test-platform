@@ -296,8 +296,13 @@ function ExamContent() {
       if (data.ok) setSession(data.session);
     }
 
+    // Сторінка "активна" тільки якщо вона видима І у фокусі
+    function isPageActive() {
+      return !document.hidden && document.hasFocus();
+    }
+
     function onHide() {
-      if (!document.hidden) return;
+      if (exitStartRef.current !== null) return; // вже відстежується вихід
       exitStartRef.current = Date.now();
       focusLostCountRef.current += 1;
       if (focusLostCountRef.current > 3) {
@@ -310,38 +315,36 @@ function ExamContent() {
     }
 
     function onShow() {
-      if (document.hidden) return;
+      if (exitStartRef.current === null) return; // нічого не відстежується
       clearTimeout(exitTimerRef.current);
-      if (exitStartRef.current) {
-        const durationSeconds = Math.floor((Date.now() - exitStartRef.current) / 1000);
-        exitStartRef.current = null;
-        fetch('/api/log-exit', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId, durationSeconds, exitCount: focusLostCountRef.current }),
-        });
-      }
+      const durationSeconds = Math.floor((Date.now() - exitStartRef.current) / 1000);
+      exitStartRef.current = null;
+      fetch('/api/log-exit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, durationSeconds, exitCount: focusLostCountRef.current }),
+      });
     }
 
     function onVisibilityChange() {
-      if (document.hidden) onHide(); else onShow();
+      if (document.hidden) onHide(); else if (isPageActive()) onShow();
     }
     function onWindowBlur() {
-      if (document.hidden) return;
+      // Спрацьовує і при overlay (Gemini) — не перевіряємо document.hidden
       onHide();
     }
     function onWindowFocus() {
-      if (document.hidden) return;
-      onShow();
+      if (isPageActive()) onShow();
     }
 
+    // Поллінг кожну секунду — для випадків де blur не спрацьовує (деякі Android браузери)
     const focusPoller = setInterval(() => {
-      if (!document.hasFocus() && !document.hidden && exitStartRef.current === null) {
+      if (!isPageActive() && exitStartRef.current === null) {
         onHide();
-      } else if (document.hasFocus() && exitStartRef.current !== null) {
+      } else if (isPageActive() && exitStartRef.current !== null) {
         onShow();
       }
-    }, 2000);
+    }, 1000);
 
     document.addEventListener('visibilitychange', onVisibilityChange);
     window.addEventListener('blur', onWindowBlur);
@@ -486,8 +489,8 @@ function ExamContent() {
           </div>
         </div>
 
-        {/* Завдання */}
-        <div className="mt-4 space-y-4 md:mt-8 md:space-y-5">
+        {/* Завдання (select-none щоб не можна було виділити і скопіювати текст) */}
+        <div className="mt-4 space-y-4 md:mt-8 md:space-y-5 select-none" onContextMenu={(e) => e.preventDefault()}>
           {work.tasks.map((task: any, index: number) => {
             const taskText = typeof task === 'string' ? task : task.text;
             const choices: string[] = typeof task === 'string' ? [] : (task.choices || []);
