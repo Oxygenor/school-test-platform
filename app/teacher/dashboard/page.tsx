@@ -7,8 +7,11 @@ import { Card, PageContainer, Title } from '@/components/ui';
 
 interface ClassStatus {
   classId: number;
+  classKey: string;
   active: boolean;
   loading: boolean;
+  showKey: boolean;
+  sessionCode: string | null;
 }
 
 export default function TeacherDashboardPage() {
@@ -17,6 +20,7 @@ export default function TeacherDashboardPage() {
   const [teacherName, setTeacherName] = useState('');
   const [statuses, setStatuses] = useState<ClassStatus[]>([]);
   const [newClassId, setNewClassId] = useState('');
+  const [newClassKey, setNewClassKey] = useState('');
   const [addError, setAddError] = useState('');
   const [addLoading, setAddLoading] = useState(false);
 
@@ -35,12 +39,12 @@ export default function TeacherDashboardPage() {
     if (!data.ok) return;
 
     const results = await Promise.all(
-      data.classes.map(async (classId: number) => {
+      data.classes.map(async ({ classId, classKey }: { classId: number; classKey: string }) => {
         const r = await fetch(`/api/exam-status?classId=${classId}`, {
           headers: { 'x-teacher-token': t },
         });
         const d = await r.json();
-        return { classId, active: d.active ?? false, loading: false };
+        return { classId, classKey, active: d.active ?? false, loading: false, showKey: false, sessionCode: d.session_code ?? null };
       })
     );
     setStatuses(results);
@@ -55,7 +59,9 @@ export default function TeacherDashboardPage() {
     });
     const data = await res.json();
     setStatuses((prev) => prev.map((s) =>
-      s.classId === classId ? { ...s, active: data.ok ? newActive : s.active, loading: false } : s
+      s.classId === classId
+        ? { ...s, active: data.ok ? newActive : s.active, loading: false, sessionCode: data.session_code ?? null }
+        : s
     ));
   }
 
@@ -63,22 +69,24 @@ export default function TeacherDashboardPage() {
     setAddError('');
     const id = Number(newClassId);
     if (!id || id < 1 || id > 12) { setAddError('Введіть номер від 1 до 12'); return; }
+    if (!newClassKey.trim()) { setAddError('Введіть ключ класу для учнів'); return; }
     if (statuses.some((s) => s.classId === id)) { setAddError('Цей клас вже є'); return; }
     setAddLoading(true);
     const res = await fetch('/api/classes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-teacher-token': token },
-      body: JSON.stringify({ classId: id }),
+      body: JSON.stringify({ classId: id, classKey: newClassKey.trim() }),
     });
     const data = await res.json();
     setAddLoading(false);
     if (!data.ok) { setAddError(data.error ?? 'Помилка'); return; }
     setNewClassId('');
-    setStatuses((prev) => [...prev, { classId: id, active: false, loading: false }].sort((a, b) => a.classId - b.classId));
+    setNewClassKey('');
+    setStatuses((prev) => [...prev, { classId: id, classKey: data.classKey, active: false, loading: false, showKey: false, sessionCode: null }].sort((a, b) => a.classId - b.classId));
   }
 
   async function deleteClass(classId: number) {
-    if (!confirm(`Видалити ${classId} клас? Всі дані будуть втрачені.`)) return;
+    if (!confirm(`Видалити ${classId} клас?`)) return;
     await fetch('/api/classes', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json', 'x-teacher-token': token },
@@ -88,10 +96,7 @@ export default function TeacherDashboardPage() {
   }
 
   async function logout() {
-    await fetch('/api/teacher-logout', {
-      method: 'POST',
-      headers: { 'x-teacher-token': token },
-    });
+    await fetch('/api/teacher-logout', { method: 'POST', headers: { 'x-teacher-token': token } });
     sessionStorage.removeItem('teacherToken');
     sessionStorage.removeItem('teacherName');
     router.push('/teacher/login');
@@ -119,13 +124,19 @@ export default function TeacherDashboardPage() {
         {/* Додати клас */}
         <Card>
           <p className="mb-3 font-medium text-slate-700">Додати клас</p>
-          <div className="flex gap-3">
+          <div className="flex gap-3 flex-wrap">
             <input
               type="number" min={1} max={12} value={newClassId}
               onChange={(e) => { setNewClassId(e.target.value); setAddError(''); }}
-              onKeyDown={(e) => e.key === 'Enter' && addClass()}
               placeholder="Номер класу"
-              className="w-40 rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-700"
+              className="w-36 rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-700"
+            />
+            <input
+              type="text" value={newClassKey}
+              onChange={(e) => { setNewClassKey(e.target.value); setAddError(''); }}
+              onKeyDown={(e) => e.key === 'Enter' && addClass()}
+              placeholder="Ключ для учнів"
+              className="w-48 rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-700"
             />
             <button
               onClick={addClass} disabled={addLoading}
@@ -135,11 +146,12 @@ export default function TeacherDashboardPage() {
             </button>
           </div>
           {addError && <p className="mt-2 text-sm text-red-600">{addError}</p>}
+          <p className="mt-2 text-xs text-slate-400">Ключ учні вводять при вході щоб підтвердити свій клас</p>
         </Card>
 
         {/* Класи */}
         <div className="grid gap-4 md:grid-cols-3">
-          {statuses.map(({ classId, active, loading }) => (
+          {statuses.map(({ classId, classKey, active, loading, showKey, sessionCode }) => (
             <Card key={classId}>
               <div className="flex items-center justify-between">
                 <span className="text-2xl font-bold">{classId} клас</span>
@@ -147,6 +159,16 @@ export default function TeacherDashboardPage() {
                   {active ? 'Активно' : 'Вимкнено'}
                 </span>
               </div>
+
+              {/* Код для учнів (тільки коли іспит активний) */}
+              {active && sessionCode && (
+                <div className="mt-3 rounded-2xl bg-green-50 border border-green-200 px-4 py-3 text-center">
+                  <p className="text-xs font-medium text-green-600 mb-1">Код для учнів</p>
+                  <p className="text-4xl font-bold tracking-[0.3em] text-green-700">{sessionCode}</p>
+                  <p className="text-xs text-green-500 mt-1">Продиктуйте учням</p>
+                </div>
+              )}
+
               <div className="mt-4 flex flex-col gap-2">
                 <button
                   onClick={() => toggle(classId, !active)} disabled={loading}

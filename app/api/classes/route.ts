@@ -10,7 +10,7 @@ export async function GET(req: Request) {
 
   const { data, error } = await supabaseAdmin
     .from('teacher_classes')
-    .select('class_id')
+    .select('class_id, classes!inner(class_key)')
     .eq('teacher_id', teacher.id)
     .order('class_id');
 
@@ -18,7 +18,12 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, classes: data.map((c) => c.class_id) });
+  const classes = data.map((c) => ({
+    classId: c.class_id,
+    classKey: (c.classes as any)?.class_key ?? '',
+  }));
+
+  return NextResponse.json({ ok: true, classes });
 }
 
 export async function POST(req: Request) {
@@ -27,13 +32,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { classId } = await req.json();
+  const { classId, classKey } = await req.json();
   const id = Number(classId);
   if (!id || id < 1 || id > 12) {
     return NextResponse.json({ ok: false, error: 'Введіть номер від 1 до 12' }, { status: 400 });
   }
+  if (!classKey?.trim()) {
+    return NextResponse.json({ ok: false, error: 'Введіть ключ класу' }, { status: 400 });
+  }
 
-  // Перевіряємо конфлікт предметів: чи є вже вчитель з таким же предметом у цьому класі
+  // Перевіряємо конфлікт предметів
   const { data: myTeacher } = await supabaseAdmin
     .from('teachers')
     .select('subjects')
@@ -61,12 +69,22 @@ export async function POST(req: Request) {
     }
   }
 
-  // Переконуємось що клас існує в таблиці classes
-  await supabaseAdmin
+  // Якщо клас вже існує — не змінюємо ключ (він спільний для всіх вчителів класу)
+  const { data: existingClass } = await supabaseAdmin
     .from('classes')
-    .upsert({ id }, { onConflict: 'id', ignoreDuplicates: true });
+    .select('id, class_key')
+    .eq('id', id)
+    .single();
 
-  // Додаємо зв'язок вчитель-клас (ігноруємо дублікати)
+  if (existingClass) {
+    // Клас вже є — просто додаємо зв'язок вчитель-клас
+  } else {
+    // Новий клас — зберігаємо з ключем
+    await supabaseAdmin
+      .from('classes')
+      .insert({ id, class_key: classKey.trim() });
+  }
+
   const { error } = await supabaseAdmin
     .from('teacher_classes')
     .upsert(
@@ -78,7 +96,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
 
-  // Створюємо статус іспиту для цього вчителя і класу
   await supabaseAdmin
     .from('teacher_exam_status')
     .upsert(
@@ -86,7 +103,8 @@ export async function POST(req: Request) {
       { onConflict: 'teacher_id,class_id' }
     );
 
-  return NextResponse.json({ ok: true });
+  const key = existingClass?.class_key ?? classKey.trim();
+  return NextResponse.json({ ok: true, classKey: key });
 }
 
 export async function DELETE(req: Request) {
@@ -98,7 +116,6 @@ export async function DELETE(req: Request) {
   const { classId } = await req.json();
   const id = Number(classId);
 
-  // Видаляємо лише зв'язок цього вчителя з класом
   await supabaseAdmin
     .from('teacher_classes')
     .delete()

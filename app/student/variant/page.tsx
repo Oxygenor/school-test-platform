@@ -18,6 +18,8 @@ function VariantContent() {
   const classId = params.get('classId');
   const fullName = params.get('fullName');
   const studentId = params.get('studentId');
+  const teacherIdParam = params.get('teacherId');
+  const teacherNameParam = params.get('teacherName');
 
   const [subjects, setSubjects] = useState<SubjectOption[]>([]);
   const [selectedOption, setSelectedOption] = useState<SubjectOption | null>(null);
@@ -42,20 +44,22 @@ function VariantContent() {
     checkExistingSession();
   }, [router]);
 
-  // Завантажуємо предмети (активні іспити з іменем вчителя)
+  // Завантажуємо предмети для конкретного вчителя (з коду сесії)
   const loadSubjects = useCallback(async () => {
-    if (!classId) return;
+    if (!classId || !teacherIdParam) return;
     setLoadingSubjects(true);
     const res = await fetch(`/api/student-subjects?classId=${classId}`);
     const data = await res.json();
     if (data.ok) {
-      setSubjects(data.subjects);
-      setExamActive(data.subjects.length > 0);
+      // Фільтруємо тільки предмети цього вчителя
+      const filtered = data.subjects.filter((s: SubjectOption) => s.teacherId === teacherIdParam);
+      setSubjects(filtered);
+      setExamActive(filtered.length > 0);
     } else {
       setExamActive(false);
     }
     setLoadingSubjects(false);
-  }, [classId]);
+  }, [classId, teacherIdParam]);
 
   useEffect(() => {
     loadSubjects();

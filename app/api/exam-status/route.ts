@@ -14,11 +14,15 @@ export async function GET(req: Request) {
     if (teacher) {
       const { data } = await supabaseAdmin
         .from('teacher_exam_status')
-        .select('exam_active')
+        .select('exam_active, session_code')
         .eq('class_id', classId)
         .eq('teacher_id', teacher.id)
         .single();
-      return NextResponse.json({ ok: true, active: data?.exam_active ?? false });
+      return NextResponse.json({
+        ok: true,
+        active: data?.exam_active ?? false,
+        session_code: data?.session_code ?? null,
+      });
     }
   }
 
@@ -51,10 +55,15 @@ export async function POST(req: Request) {
 
   const { classId, active } = await req.json();
 
+  // При активації генеруємо новий 6-значний код, при деактивації — очищаємо
+  const session_code = active
+    ? String(Math.floor(100000 + Math.random() * 900000))
+    : null;
+
   const { error } = await supabaseAdmin
     .from('teacher_exam_status')
     .upsert(
-      { teacher_id: teacher.id, class_id: Number(classId), exam_active: active },
+      { teacher_id: teacher.id, class_id: Number(classId), exam_active: active, session_code },
       { onConflict: 'teacher_id,class_id' }
     );
 
@@ -62,5 +71,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, active });
+  return NextResponse.json({ ok: true, active, session_code });
 }

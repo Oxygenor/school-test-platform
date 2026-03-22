@@ -12,11 +12,17 @@ interface StudentItem {
 
 export default function StudentRegisterPage() {
   const router = useRouter();
-  const [allClasses, setAllClasses] = useState<number[]>([]);
+
+  const [code, setCode] = useState('');
+  const [codeError, setCodeError] = useState('');
+  const [verifyingCode, setVerifyingCode] = useState(false);
+
   const [classId, setClassId] = useState<number | null>(null);
+  const [teacherId, setTeacherId] = useState('');
+  const [teacherName, setTeacherName] = useState('');
+
   const [students, setStudents] = useState<StudentItem[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState('');
-  const [loadingClasses, setLoadingClasses] = useState(true);
   const [loadingStudents, setLoadingStudents] = useState(false);
 
   // Перевіряємо існуючу сесію
@@ -24,13 +30,12 @@ export default function StudentRegisterPage() {
     async function checkExistingSession() {
       const sessionId = localStorage.getItem('studentSessionId');
       if (!sessionId) return;
-      const response = await fetch(`/api/get-session?sessionId=${sessionId}`);
-      const data = await response.json();
+      const res = await fetch(`/api/get-session?sessionId=${sessionId}`);
+      const data = await res.json();
       if (data.ok && data.session && ['writing', 'blocked'].includes(data.session.status)) {
         router.replace(`/student/exam?sessionId=${data.session.id}`);
       } else {
         localStorage.removeItem('studentSessionId');
-        localStorage.removeItem('studentId');
         localStorage.removeItem('studentFullName');
         localStorage.removeItem('studentClassId');
       }
@@ -38,115 +43,100 @@ export default function StudentRegisterPage() {
     checkExistingSession();
   }, [router]);
 
-  // Завантажуємо список класів
-  useEffect(() => {
-    async function loadClasses() {
-      setLoadingClasses(true);
-      const res = await fetch('/api/student-classes');
-      const data = await res.json();
-      if (data.ok) setAllClasses(data.classes);
-      setLoadingClasses(false);
-    }
-    loadClasses();
-  }, []);
+  async function verifyCode() {
+    const trimmed = code.trim();
+    if (trimmed.length !== 6) { setCodeError('Код має бути 6 цифр'); return; }
+    setVerifyingCode(true);
+    setCodeError('');
+    const res = await fetch(`/api/session-code?code=${trimmed}`);
+    const data = await res.json();
+    setVerifyingCode(false);
+    if (!data.ok) { setCodeError(data.error || 'Невірний код'); return; }
 
-  // Завантажуємо учнів при виборі класу
-  useEffect(() => {
-    if (!classId) {
-      setStudents([]);
-      setSelectedStudentId('');
-      return;
-    }
-    async function loadStudents() {
-      setLoadingStudents(true);
-      setSelectedStudentId('');
-      const res = await fetch(`/api/students?classId=${classId}`);
-      const data = await res.json();
-      setStudents(data.ok ? data.students : []);
-      setLoadingStudents(false);
-    }
-    loadStudents();
-  }, [classId]);
+    setClassId(data.classId);
+    setTeacherId(data.teacherId);
+    setTeacherName(data.teacherName);
+
+    setLoadingStudents(true);
+    const r = await fetch(`/api/students?classId=${data.classId}`);
+    const d = await r.json();
+    setStudents(d.ok ? d.students : []);
+    setLoadingStudents(false);
+  }
 
   function nextStep() {
-    const selectedStudent = students.find((s) => s.id === selectedStudentId);
-    if (!classId || !selectedStudent) return;
-
+    const student = students.find((s) => s.id === selectedStudentId);
+    if (!classId || !student) return;
     const params = new URLSearchParams({
       classId: String(classId),
-      studentId: selectedStudent.id,
-      fullName: selectedStudent.full_name,
+      studentId: student.id,
+      fullName: student.full_name,
+      teacherId,
+      teacherName,
     });
-
     router.push(`/student/variant?${params.toString()}`);
   }
 
   return (
     <PageContainer>
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto max-w-md">
         <Card>
           <Title>Вхід учня</Title>
-          <p className="mt-2 text-slate-600">Оберіть свій клас і знайдіть себе у списку.</p>
 
-          {/* Вибір класу */}
-          <div className="mt-6">
-            <label className="mb-3 block text-sm font-medium text-slate-700">Ваш клас</label>
-            {loadingClasses ? (
-              <div className="text-sm text-slate-400">Завантаження...</div>
-            ) : allClasses.length === 0 ? (
-              <div className="text-sm text-slate-400">Жоден клас ще не доданий вчителем.</div>
-            ) : (
-              <div className="flex flex-wrap gap-3">
-                {allClasses.map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => setClassId(c)}
-                    className={`rounded-3xl border px-6 py-4 text-xl font-semibold transition ${
-                      classId === c
-                        ? 'border-slate-900 bg-slate-900 text-white'
-                        : 'border-slate-300 bg-white text-slate-900 hover:border-slate-500'
-                    }`}
-                  >
-                    {c} клас
-                  </button>
-                ))}
+          {!classId ? (
+            // Крок 1: Введення коду
+            <div className="mt-6 space-y-4">
+              <p className="text-slate-500 text-sm">Введіть 6-значний код який дав вчитель</p>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                value={code}
+                onChange={(e) => { setCode(e.target.value.replace(/\D/g, '')); setCodeError(''); }}
+                onKeyDown={(e) => e.key === 'Enter' && verifyCode()}
+                placeholder="000000"
+                className="w-full rounded-2xl border border-slate-300 px-4 py-4 text-center text-3xl font-bold tracking-[0.3em] outline-none focus:border-slate-700"
+              />
+              {codeError && <p className="text-sm text-red-600 text-center">{codeError}</p>}
+              <Button onClick={verifyCode} disabled={code.length !== 6 || verifyingCode} className="w-full">
+                {verifyingCode ? 'Перевірка...' : 'Підтвердити'}
+              </Button>
+              <Button className="w-full bg-slate-200 text-slate-900 hover:bg-slate-300" onClick={() => router.push('/')}>
+                Назад
+              </Button>
+            </div>
+          ) : (
+            // Крок 2: Вибір імені
+            <div className="mt-6 space-y-4">
+              <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+                <div>Клас: <strong>{classId}</strong></div>
+                <div>Вчитель: <strong>{teacherName}</strong></div>
               </div>
-            )}
-          </div>
-
-          {/* Вибір учня */}
-          {classId && (
-            <div className="mt-6">
-              <label className="mb-2 block text-sm font-medium text-slate-700">Оберіть себе зі списку</label>
-              <select
-                value={selectedStudentId}
-                onChange={(e) => setSelectedStudentId(e.target.value)}
-                className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-700"
-                disabled={loadingStudents}
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">Оберіть себе зі списку</label>
+                <select
+                  value={selectedStudentId}
+                  onChange={(e) => setSelectedStudentId(e.target.value)}
+                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-700"
+                  disabled={loadingStudents}
+                >
+                  <option value="">{loadingStudents ? 'Завантаження...' : 'Оберіть учня'}</option>
+                  {students.map((s) => (
+                    <option key={s.id} value={s.id}>{s.full_name}</option>
+                  ))}
+                </select>
+              </div>
+              <Button onClick={nextStep} disabled={!selectedStudentId} className="w-full">
+                Далі
+              </Button>
+              <Button
+                className="w-full bg-slate-200 text-slate-900 hover:bg-slate-300"
+                onClick={() => { setClassId(null); setCode(''); setStudents([]); setSelectedStudentId(''); }}
               >
-                <option value="">
-                  {loadingStudents ? 'Завантаження учнів...' : 'Оберіть учня'}
-                </option>
-                {students.map((student) => (
-                  <option key={student.id} value={student.id}>
-                    {student.full_name}
-                  </option>
-                ))}
-              </select>
+                Змінити код
+              </Button>
             </div>
           )}
-
-          <div className="mt-6 flex gap-3">
-            <Button onClick={nextStep} disabled={!classId || !selectedStudentId}>
-              Далі
-            </Button>
-            <Button
-              className="bg-slate-200 text-slate-900 hover:bg-slate-300"
-              onClick={() => router.push('/')}
-            >
-              Назад
-            </Button>
-          </div>
         </Card>
       </div>
     </PageContainer>
