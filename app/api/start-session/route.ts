@@ -51,7 +51,6 @@ export async function POST(req: Request) {
         full_name: String(fullName || '').trim(),
         variant: Number(variant),
         subject: subject ? String(subject).trim() : null,
-        work_type: 'Самостійна робота',
         status: 'writing',
         teacher_id: resolvedTeacherId,
       })
@@ -61,12 +60,6 @@ export async function POST(req: Request) {
     if (error) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     }
-
-    await supabaseAdmin.from('session_events').insert({
-      session_id: data.id,
-      event_type: 'started',
-      event_payload: { classId, variant, fullName, studentId, teacherId: resolvedTeacherId },
-    });
 
     return NextResponse.json({ ok: true, session: data });
   } catch {
