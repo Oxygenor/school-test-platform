@@ -36,7 +36,9 @@ export default function TeacherDashboardPage() {
 
     const results = await Promise.all(
       data.classes.map(async (classId: number) => {
-        const r = await fetch(`/api/exam-status?classId=${classId}`);
+        const r = await fetch(`/api/exam-status?classId=${classId}`, {
+          headers: { 'x-teacher-token': t },
+        });
         const d = await r.json();
         return { classId, active: d.active ?? false, loading: false };
       })

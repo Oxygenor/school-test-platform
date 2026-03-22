@@ -5,20 +5,35 @@ import { requireTeacher } from '@/lib/teacher-auth';
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const classId = Number(searchParams.get('classId'));
-  const teacherId = searchParams.get('teacherId');
+  const teacherIdParam = searchParams.get('teacherId');
 
-  if (teacherId) {
-    // Учень перевіряє статус свого конкретного вчителя
+  // Якщо є токен вчителя в заголовку — показуємо статус тільки цього вчителя
+  const token = req.headers.get('x-teacher-token');
+  if (token) {
+    const teacher = await requireTeacher(req);
+    if (teacher) {
+      const { data } = await supabaseAdmin
+        .from('teacher_exam_status')
+        .select('exam_active')
+        .eq('class_id', classId)
+        .eq('teacher_id', teacher.id)
+        .single();
+      return NextResponse.json({ ok: true, active: data?.exam_active ?? false });
+    }
+  }
+
+  // Учень перевіряє статус свого конкретного вчителя по teacherId
+  if (teacherIdParam) {
     const { data } = await supabaseAdmin
       .from('teacher_exam_status')
       .select('exam_active')
       .eq('class_id', classId)
-      .eq('teacher_id', teacherId)
+      .eq('teacher_id', teacherIdParam)
       .single();
     return NextResponse.json({ ok: true, active: data?.exam_active ?? false });
   }
 
-  // Загальна перевірка: чи є хоч один активний іспит для класу
+  // Загальна перевірка (для учня): чи є хоч один активний іспит для класу
   const { data } = await supabaseAdmin
     .from('teacher_exam_status')
     .select('exam_active, teacher_id')
