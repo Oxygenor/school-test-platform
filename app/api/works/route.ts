@@ -80,7 +80,6 @@ export async function POST(req: Request) {
         tasks,
         online_mode: onlineMode ?? false,
         teacher_id: teacher.id,
-        updated_at: new Date().toISOString(),
       },
       { onConflict: 'class_id,variant,subject,teacher_id' }
     )

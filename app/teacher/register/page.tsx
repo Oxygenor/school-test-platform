@@ -103,9 +103,9 @@ export default function TeacherRegisterPage() {
                 type="password"
                 value={registrationCode}
                 onChange={(e) => setRegistrationCode(e.target.value)}
-                placeholder="Секретний код від адміністратора"
+                placeholder="Секретний код від адміністратора сайту"
               />
-              <p className="mt-1 text-xs text-slate-400">Код видає адміністратор школи</p>
+              <p className="mt-1 text-xs text-slate-400">Код видає адміністратор сайту</p>
             </div>
 
             <div>
