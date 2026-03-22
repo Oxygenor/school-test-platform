@@ -3,7 +3,12 @@ import { supabaseAdmin } from '@/lib/supabase';
 import { hashPassword } from '@/lib/teacher-auth';
 
 export async function POST(req: Request) {
-  const { name, password, subjects } = await req.json();
+  const { name, password, subjects, registrationCode } = await req.json();
+
+  const validCode = process.env.TEACHER_REGISTRATION_CODE;
+  if (!validCode || registrationCode !== validCode) {
+    return NextResponse.json({ ok: false, error: 'Невірний код реєстрації' }, { status: 403 });
+  }
 
   if (!name?.trim() || !password?.trim()) {
     return NextResponse.json({ ok: false, error: "Введіть ім'я та пароль" }, { status: 400 });

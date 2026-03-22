@@ -31,6 +31,7 @@ export default function TeacherRegisterPage() {
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [password2, setPassword2] = useState('');
+  const [registrationCode, setRegistrationCode] = useState('');
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -46,13 +47,14 @@ export default function TeacherRegisterPage() {
     if (password !== password2) { setError('Паролі не співпадають'); return; }
     if (password.length < 4) { setError('Пароль мінімум 4 символи'); return; }
     if (selectedSubjects.length === 0) { setError('Оберіть хоча б один предмет який ви викладаєте'); return; }
+    if (!registrationCode.trim()) { setError('Введіть код реєстрації'); return; }
 
     setLoading(true);
     setError('');
     const res = await fetch('/api/teacher-register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: name.trim(), password, subjects: selectedSubjects }),
+      body: JSON.stringify({ name: name.trim(), password, subjects: selectedSubjects, registrationCode: registrationCode.trim() }),
     });
     const data = await res.json();
     setLoading(false);
@@ -93,6 +95,17 @@ export default function TeacherRegisterPage() {
                 onChange={(e) => setPassword2(e.target.value)}
                 placeholder="Повторіть пароль"
               />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium">Код реєстрації</label>
+              <Input
+                type="password"
+                value={registrationCode}
+                onChange={(e) => setRegistrationCode(e.target.value)}
+                placeholder="Секретний код від адміністратора"
+              />
+              <p className="mt-1 text-xs text-slate-400">Код видає адміністратор школи</p>
             </div>
 
             <div>
