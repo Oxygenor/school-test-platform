@@ -27,7 +27,7 @@ export default function HomePage() {
           </div>
 
           <h1 className="text-4xl font-bold leading-tight md:text-5xl">
-            Розумний клас
+            Brain 1.0
           </h1>
 
           <p className="mt-5 text-base leading-7 text-slate-400">
