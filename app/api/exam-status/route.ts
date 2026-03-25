@@ -71,8 +71,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
 
-  // При зупинці роботи — очищаємо сесії учнів цього вчителя для цього класу
   if (!active) {
+    // При зупинці — завершуємо всі активні сесії учнів
+    await supabaseAdmin
+      .from('student_sessions')
+      .update({ status: 'finished', finished_at: new Date().toISOString() })
+      .eq('class_id', Number(classId))
+      .eq('teacher_id', teacher.id)
+      .in('status', ['writing', 'blocked']);
+  } else {
+    // При новому запуску — очищаємо старі сесії щоб таблиця була чистою
     await supabaseAdmin
       .from('student_sessions')
       .delete()
