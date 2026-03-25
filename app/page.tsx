@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { StudentSessionGuard } from '@/components/student-session-guard';
+import TicTacToe from '@/components/tictactoe';
 
 export default function HomePage() {
   const router = useRouter();
@@ -19,7 +20,7 @@ export default function HomePage() {
   return (
     <>
       <StudentSessionGuard />
-      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 px-6 text-white">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 px-6 py-12 text-white">
 
         <div className="w-full max-w-sm text-center">
           <div className="mb-6 inline-block rounded-2xl bg-slate-800 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-slate-400">
@@ -31,20 +32,22 @@ export default function HomePage() {
           </h1>
 
           <p className="mt-5 text-base leading-7 text-slate-400">
-            Учень отримує завдання на екрані і записує відповіді на папері.
+            Зачекай поки вчитель скаже код і натисни "Почати".
           </p>
 
           <button
             onClick={start}
-            className="mt-10 w-full rounded-2xl bg-white py-4 text-lg font-semibold text-slate-950 transition active:scale-95"
+            className="mt-8 w-full rounded-2xl bg-white py-4 text-lg font-semibold text-slate-950 transition active:scale-95"
           >
             Почати
           </button>
+
+          <TicTacToe />
         </div>
 
         <a
           href="/teacher/login"
-          className="absolute bottom-8 text-sm text-slate-600 hover:text-slate-400"
+          className="mt-10 text-sm text-slate-600 hover:text-slate-400"
         >
           Вхід для вчителя
         </a>
