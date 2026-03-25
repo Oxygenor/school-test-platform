@@ -215,6 +215,11 @@ function ExamContent() {
         setSession(s);
         return;
       }
+      // Вчитель завершив роботу для всіх
+      if (s.status === 'finished') {
+        setExamEnded(true);
+        return;
+      }
       // Повідомлення від вчителя
       if (s.teacher_message) {
         setTeacherMessage(s.teacher_message);
