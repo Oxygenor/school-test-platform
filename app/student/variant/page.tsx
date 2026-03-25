@@ -4,6 +4,7 @@ import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Card, PageContainer, Title } from '@/components/ui';
 import { StudentSessionGuard } from '@/components/student-session-guard';
+import TicTacToe from '@/components/tictactoe';
 
 interface SubjectOption {
   subject: string;
@@ -118,6 +119,7 @@ function VariantContent() {
             <br />Сторінка оновлюється автоматично.
           </p>
           <div className="mt-2 text-sm text-slate-600">{fullName}</div>
+          <TicTacToe />
         </div>
       </div>
     );
