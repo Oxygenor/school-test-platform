@@ -283,16 +283,13 @@ function ExamContent() {
       if (alreadyBlocked) return;
       alreadyBlocked = true;
       clearTimeout(exitTimerRef.current);
-      const blockedAt = new Date().toISOString();
-      setSession((prev) =>
-        prev ? { ...prev, status: 'blocked', block_reason: reason, blocked_at: blockedAt } : prev
-      );
       const response = await fetch('/api/block-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId, reason }),
       });
       const data = await response.json();
+      // Оновлюємо стан тільки після підтвердження від сервера
       if (data.ok) setSession(data.session);
     }
 
