@@ -27,11 +27,11 @@ export default function HomePage() {
           </div>
 
           <h1 className="text-4xl font-bold leading-tight md:text-5xl">
-            Платформа контрольних робіт
+            Розумний клас
           </h1>
 
           <p className="mt-5 text-base leading-7 text-slate-400">
-            Зачекай поки вчитель скаже код і натисни "Почати".
+            Онлайн платформа для проведення контрольних і самостійних робіт.
           </p>
 
           <button
