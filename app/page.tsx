@@ -2,7 +2,6 @@
 
 import { useRouter } from 'next/navigation';
 import { StudentSessionGuard } from '@/components/student-session-guard';
-import TicTacToe from '@/components/tictactoe';
 
 export default function HomePage() {
   const router = useRouter();
@@ -42,7 +41,6 @@ export default function HomePage() {
             Почати
           </button>
 
-          <TicTacToe />
         </div>
 
         <a

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Card, PageContainer, Title } from '@/components/ui';
+import TicTacToe from '@/components/tictactoe';
 
 interface StudentItem {
   id: string;
@@ -138,6 +139,7 @@ export default function StudentRegisterPage() {
             </div>
           )}
         </Card>
+        <TicTacToe />
       </div>
     </PageContainer>
   );
