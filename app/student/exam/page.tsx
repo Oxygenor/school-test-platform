@@ -210,6 +210,11 @@ function ExamContent() {
       const data = await res.json();
       if (!data.ok) return;
       const s: StudentSession = data.session;
+      // Вчитель заблокував вручну
+      if (s.status === 'blocked') {
+        setSession(s);
+        return;
+      }
       // Повідомлення від вчителя
       if (s.teacher_message) {
         setTeacherMessage(s.teacher_message);
