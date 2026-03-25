@@ -26,5 +26,16 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, students: students || [] });
+  // Будуємо мапи виходів з exit_logs колонки
+  const exitCountMap: Record<string, number> = {};
+  const exitLogMap: Record<string, Array<{ exitedAt: string; durationSeconds: number }>> = {};
+
+  for (const s of students || []) {
+    const logs: Array<{ exitedAt: string; durationSeconds: number }> =
+      Array.isArray(s.exit_logs) ? s.exit_logs : [];
+    exitCountMap[s.id] = logs.length;
+    exitLogMap[s.id] = logs;
+  }
+
+  return NextResponse.json({ ok: true, students: students || [], exitCountMap, exitLogMap });
 }
