@@ -51,7 +51,7 @@ export async function POST(req: Request) {
     }
   }
 
-  const updateData: any = { status: 'finished', updated_at: finishedAt };
+  const updateData: any = { status: 'finished', finished_at: finishedAt };
   if (answers) updateData.answers = answers;
   if (score !== null) updateData.score = score;
 

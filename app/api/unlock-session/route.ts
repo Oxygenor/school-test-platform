@@ -56,8 +56,6 @@ export async function POST(req: Request) {
         status: 'writing',
         block_reason: null,
         blocked_at: null,
-        unlocked_at: unlockedAt,
-        updated_at: unlockedAt,
       })
       .eq('id', sessionId)
       .select('*')
@@ -67,11 +65,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     }
 
-    await supabaseAdmin.from('session_events').insert({
-      session_id: sessionId,
-      event_type: 'unlocked',
-      event_payload: { unlockedAt },
-    });
 
     return NextResponse.json({ ok: true, session: data });
   } catch {
