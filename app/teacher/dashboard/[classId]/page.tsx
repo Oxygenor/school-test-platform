@@ -72,24 +72,33 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
   useEffect(() => {
     const saved = sessionStorage.getItem('teacherToken');
     if (!saved) { router.replace('/teacher/login'); return; }
-    fetchStudents();
-    const interval = setInterval(fetchStudents, 5000);
+    fetchStudents(saved);
+    const interval = setInterval(() => {
+      const t = sessionStorage.getItem('teacherToken');
+      if (t) fetchStudents(t);
+    }, 5000);
     return () => clearInterval(interval);
   }, [classId]);
 
   useEffect(() => {
-    fetch(`/api/works?classId=${numericClassId}`)
+    const t = sessionStorage.getItem('teacherToken');
+    if (!t) return;
+    fetch(`/api/works?classId=${numericClassId}`, { headers: { 'x-teacher-token': t } })
       .then((r) => r.json())
       .then((d) => { if (d.ok) setWorks(d.works); });
   }, [classId]);
 
-  async function fetchStudents() {
-    const res = await fetch(`/api/class-students?classId=${numericClassId}`);
+  async function fetchStudents(authToken?: string) {
+    const t = authToken ?? sessionStorage.getItem('teacherToken');
+    if (!t) return;
+    const res = await fetch(`/api/class-students?classId=${numericClassId}`, {
+      headers: { 'x-teacher-token': t },
+    });
     const data = await res.json();
     if (data.ok) {
       setStudents(data.students);
-      setExitCountMap(data.exitCountMap);
-      setExitLogMap(data.exitLogMap);
+      setExitCountMap(data.exitCountMap ?? {});
+      setExitLogMap(data.exitLogMap ?? {});
     }
     setLoading(false);
   }
