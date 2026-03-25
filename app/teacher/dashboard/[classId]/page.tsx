@@ -116,6 +116,18 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
     fetchStudents();
   }
 
+  async function blockStudent(sessionId: string) {
+    const token = sessionStorage.getItem('teacherToken');
+    if (!token) return;
+    if (!confirm('Заблокувати учня? Він побачить повідомлення про блокування.')) return;
+    await fetch('/api/block-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-teacher-token': token },
+      body: JSON.stringify({ sessionId, reason: 'Заблоковано вчителем' }),
+    });
+    fetchStudents();
+  }
+
   async function finishStudent(sessionId: string) {
     await fetch('/api/finish-session', {
       method: 'POST',
@@ -319,6 +331,12 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
                                   className="rounded-lg border border-green-200 bg-green-50 px-2 py-1 text-xs text-green-700 hover:bg-green-100"
                                 >
                                   +Час
+                                </button>
+                                <button
+                                  onClick={() => blockStudent(student.id)}
+                                  className="rounded-lg bg-red-500 px-2 py-1 text-xs text-white hover:bg-red-600"
+                                >
+                                  Блокувати
                                 </button>
                               </>
                             )}
