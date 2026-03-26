@@ -125,6 +125,77 @@ function PrintWorkContent() {
               );
             }
 
+            if (taskType === 'fill_blank') {
+              taskNum++;
+              const segments = (task.template as string || '').split('[___]');
+              return (
+                <div key={i} className="break-inside-avoid">
+                  <div className="flex items-start gap-3">
+                    <span className="shrink-0 font-bold">{taskNum}.</span>
+                    <div className="flex-1">
+                      {task.text && <div className="mb-2 text-sm italic text-slate-600"><MathText text={task.text} /></div>}
+                      {task.image_url && <img src={task.image_url} alt="" className="mb-2 max-h-40 object-contain" />}
+                      <div className="leading-loose">
+                        {segments.map((seg: string, si: number) => (
+                          <span key={si}>
+                            <MathText text={seg} />
+                            {si < segments.length - 1 && (
+                              <span className="inline-block w-28 border-b border-black mx-1 align-bottom" />
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-xs text-slate-400 no-print">{(task.points ?? 1) * ((task.template as string || '').match(/\[___\]/g) || []).length} б</div>
+                  </div>
+                </div>
+              );
+            }
+
+            if (taskType === 'matching') {
+              taskNum++;
+              const pairs: Array<{ left: string; right: string }> = task.pairs || [];
+              const shuffledRight = [...pairs].sort(() => Math.random() - 0.5);
+              return (
+                <div key={i} className="break-inside-avoid">
+                  <div className="flex items-start gap-3">
+                    <span className="shrink-0 font-bold">{taskNum}.</span>
+                    <div className="flex-1">
+                      <div className="leading-relaxed mb-3"><MathText text={text} /></div>
+                      {task.image_url && <img src={task.image_url} alt="" className="mb-2 max-h-40 object-contain" />}
+                      <div className="grid grid-cols-2 gap-8 mb-3">
+                        <div className="space-y-1">
+                          {pairs.map((pair: any, pi: number) => (
+                            <div key={pi} className="flex items-start gap-2 text-sm">
+                              <span className="font-bold text-slate-500 shrink-0">{pi + 1}.</span>
+                              <span><MathText text={pair.left} /></span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="space-y-1">
+                          {shuffledRight.map((pair: any, pi: number) => (
+                            <div key={pi} className="flex items-start gap-2 text-sm">
+                              <span className="font-bold text-slate-500 shrink-0">{String.fromCharCode(1040 + pi)}.</span>
+                              <span><MathText text={pair.right} /></span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-4 text-sm">
+                        {pairs.map((_: any, pi: number) => (
+                          <div key={pi} className="flex items-center gap-1">
+                            <span className="font-bold">{pi + 1} —</span>
+                            <span className="inline-block w-8 border-b border-black" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-xs text-slate-400 no-print">{(task.points ?? 1) * pairs.length} б</div>
+                  </div>
+                </div>
+              );
+            }
+
             taskNum++;
             const choices: string[] = typeof task === 'string' ? [] : (task.choices || []);
             const pts: number = typeof task === 'string' ? 1 : (task.points ?? 1);
@@ -134,6 +205,7 @@ function PrintWorkContent() {
                   <span className="shrink-0 font-bold">{taskNum}.</span>
                   <div className="flex-1">
                     <div className="leading-relaxed"><MathText text={text} /></div>
+                    {task.image_url && <img src={task.image_url} alt="" className="mt-2 mb-2 max-h-40 object-contain" />}
                     {choices.length > 0 && (
                       <div className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1">
                         {choices.map((c, ci) => (

@@ -33,6 +33,32 @@ export async function POST(req: Request) {
       let maxPoints = 0;
 
       results = (work.tasks || []).map((task: any, i: number) => {
+        if (task.type === 'fill_blank') {
+          const pts = task.points ?? 1;
+          const correctAnswers: string[] = task.answers || [];
+          maxPoints += pts * correctAnswers.length;
+          let studentAnswers: string[] = [];
+          try { studentAnswers = JSON.parse(answers[i] ?? '[]'); } catch {}
+          let earned = 0;
+          correctAnswers.forEach((correct: string, bi: number) => {
+            if ((studentAnswers[bi] ?? '').trim().toLowerCase() === correct.trim().toLowerCase()) earned += pts;
+          });
+          earnedPoints += earned;
+          return { taskIndex: i, answer: studentAnswers, correctAnswer: correctAnswers, isCorrect: earned === pts * correctAnswers.length, points: pts * correctAnswers.length, earnedPoints: earned };
+        }
+        if (task.type === 'matching') {
+          const pts = task.points ?? 1;
+          const pairCount = (task.pairs || []).length;
+          maxPoints += pts * pairCount;
+          let studentMapping: Record<string, string> = {};
+          try { studentMapping = JSON.parse(answers[i] ?? '{}'); } catch {}
+          let earned = 0;
+          (task.pairs as any[] || []).forEach((_: any, pi: number) => {
+            if (studentMapping[String(pi)] === String(pi)) earned += pts;
+          });
+          earnedPoints += earned;
+          return { taskIndex: i, answer: studentMapping, correctAnswer: Object.fromEntries((task.pairs as any[]).map((_: any, pi: number) => [String(pi), String(pi)])), isCorrect: earned === pts * pairCount, points: pts * pairCount, earnedPoints: earned };
+        }
         if (typeof task === 'string' || task.correctChoice === undefined || task.correctChoice === null) {
           return { taskIndex: i, answer: answers[i + 1] ?? null, correctAnswer: null, isCorrect: null, points: null };
         }

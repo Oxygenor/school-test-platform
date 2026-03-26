@@ -13,7 +13,12 @@ const WORK_TYPES = [
   'Тематична контрольна робота',
 ];
 
-type StoredTask = string | { text: string; choices: string[]; correctChoice?: number; points?: number } | { type: 'header' | 'description'; text: string };
+type StoredTask = string
+  | { text: string; choices?: string[]; correctChoice?: number; points?: number; image_url?: string }
+  | { type: 'header'; text: string }
+  | { type: 'description'; text: string }
+  | { type: 'fill_blank'; text: string; template: string; answers: string[]; points?: number; image_url?: string }
+  | { type: 'matching'; text: string; pairs: Array<{ left: string; right: string }>; points?: number; image_url?: string };
 
 interface DbWork {
   id: string;
@@ -28,12 +33,16 @@ interface DbWork {
 }
 
 interface TaskForm {
-  type: 'task' | 'header' | 'description';
+  type: 'task' | 'header' | 'description' | 'fill_blank' | 'matching';
   text: string;
   hasChoices: boolean;
   choices: string[];
   correctChoice: number | null;
   points: number;
+  image_url: string | null;
+  fillTemplate: string;
+  fillAnswers: string[];
+  matchingPairs: Array<{ left: string; right: string }>;
 }
 
 interface FormState {
@@ -49,28 +58,37 @@ interface FormState {
 const CHOICE_LABELS = ['А', 'Б', 'В', 'Г', 'Д'];
 
 function taskToForm(t: StoredTask): TaskForm {
-  if (typeof t === 'string') return { type: 'task', text: t, hasChoices: false, choices: ['', '', '', ''], correctChoice: null, points: 1 };
+  const base = { hasChoices: false, choices: ['', '', '', ''], correctChoice: null as null, points: 1, image_url: null as null, fillTemplate: '', fillAnswers: [] as string[], matchingPairs: [] as Array<{ left: string; right: string }> };
+  if (typeof t === 'string') return { ...base, type: 'task', text: t };
   const a = t as any;
-  if (a.type === 'header') return { type: 'header', text: a.text, hasChoices: false, choices: [], correctChoice: null, points: 1 };
-  if (a.type === 'description') return { type: 'description', text: a.text, hasChoices: false, choices: [], correctChoice: null, points: 1 };
+  if (a.type === 'header') return { ...base, type: 'header', text: a.text };
+  if (a.type === 'description') return { ...base, type: 'description', text: a.text };
+  if (a.type === 'fill_blank') return { ...base, type: 'fill_blank', text: a.text || '', points: a.points ?? 1, image_url: a.image_url ?? null, fillTemplate: a.template ?? '', fillAnswers: a.answers ?? [] };
+  if (a.type === 'matching') return { ...base, type: 'matching', text: a.text || '', points: a.points ?? 1, image_url: a.image_url ?? null, matchingPairs: a.pairs ?? [] };
   const choices = [...(a.choices || [])];
   while (choices.length < 4) choices.push('');
-  return { type: 'task', text: a.text, hasChoices: (a.choices?.length ?? 0) > 0, choices, correctChoice: a.correctChoice ?? null, points: a.points ?? 1 };
+  return { ...base, type: 'task', text: a.text, hasChoices: (a.choices?.length ?? 0) > 0, choices, correctChoice: a.correctChoice ?? null, points: a.points ?? 1, image_url: a.image_url ?? null };
 }
 
 function formToTask(t: TaskForm): StoredTask {
   if (t.type === 'header') return { type: 'header', text: t.text } as any;
   if (t.type === 'description') return { type: 'description', text: t.text } as any;
-  const filtered = t.choices.filter((c) => c.trim());
-  if (t.hasChoices && filtered.length > 0) {
-    const obj: any = { text: t.text, choices: filtered, points: t.points };
-    if (t.correctChoice !== null) obj.correctChoice = t.correctChoice;
+  if (t.type === 'fill_blank') {
+    const obj: any = { type: 'fill_blank', text: t.text, template: t.fillTemplate, answers: t.fillAnswers.slice(0, (t.fillTemplate.match(/\[___\]/g) || []).length), points: t.points };
+    if (t.image_url) obj.image_url = t.image_url;
     return obj;
   }
-  if (t.points !== 1) {
-    return { text: t.text, choices: [], points: t.points };
+  if (t.type === 'matching') {
+    const obj: any = { type: 'matching', text: t.text, pairs: t.matchingPairs.filter(p => p.left.trim() || p.right.trim()), points: t.points };
+    if (t.image_url) obj.image_url = t.image_url;
+    return obj;
   }
-  return t.text;
+  const filtered = t.choices.filter((c) => c.trim());
+  const obj: any = filtered.length > 0 && t.hasChoices
+    ? { text: t.text, choices: filtered, points: t.points, ...(t.correctChoice !== null ? { correctChoice: t.correctChoice } : {}) }
+    : t.points !== 1 ? { text: t.text, choices: [], points: t.points } : t.text;
+  if (t.image_url && typeof obj === 'object') obj.image_url = t.image_url;
+  return obj;
 }
 
 function parseTask(t: StoredTask): { text: string; choices: string[]; type?: string } {
@@ -85,7 +103,7 @@ const emptyForm = (): FormState => ({
   workType: 'Самостійна робота',
   title: '',
   durationMinutes: 40,
-  tasks: [{ type: 'task' as const, text: '', hasChoices: false, choices: ['', '', '', ''], correctChoice: null, points: 1 }],
+  tasks: [{ type: 'task' as const, text: '', hasChoices: false, choices: ['', '', '', ''], correctChoice: null, points: 1, image_url: null, fillTemplate: '', fillAnswers: [], matchingPairs: [] }],
   onlineMode: false,
 });
 
@@ -107,6 +125,7 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
   const [copySuccess, setCopySuccess] = useState('');
 
   const taskRefs = useRef<(HTMLTextAreaElement | null)[]>([]);
+  const fillTemplateRefs = useRef<(HTMLTextAreaElement | null)[]>([]);
 
   const [editingWork, setEditingWork] = useState<DbWork | null | 'new'>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
@@ -154,7 +173,7 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
       workType: work.work_type,
       title: work.title,
       durationMinutes: work.duration_minutes,
-      tasks: work.tasks.length > 0 ? work.tasks.map(taskToForm) : [{ type: 'task' as const, text: '', hasChoices: false, choices: ['', '', '', ''], correctChoice: null, points: 1 }],
+      tasks: work.tasks.length > 0 ? work.tasks.map(taskToForm) : [{ type: 'task' as const, text: '', hasChoices: false, choices: ['', '', '', ''], correctChoice: null, points: 1, image_url: null, fillTemplate: '', fillAnswers: [], matchingPairs: [] }],
       onlineMode: work.online_mode ?? false,
     });
     setEditingWork(work);
@@ -172,7 +191,7 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
     if (!form.subject.trim()) { setSaveError('Вкажіть предмет'); return; }
     if (!form.title.trim()) { setSaveError('Введіть назву роботи'); return; }
     const filteredTasks = form.tasks
-      .filter((t) => t.text.trim())
+      .filter((t) => t.text.trim() || t.type === 'fill_blank' && t.fillTemplate.trim() || t.type === 'matching' && t.matchingPairs.some(p => p.left.trim() || p.right.trim()))
       .map(formToTask);
     if (filteredTasks.length === 0) { setSaveError('Додайте хоча б одне завдання'); return; }
 
@@ -601,10 +620,10 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                         if (!isHeader && !isDesc) taskNum++;
                         const num = taskNum;
                         return (
-                      <div key={i} className={`rounded-xl border p-3 space-y-2 ${isHeader ? 'border-blue-200 bg-blue-50' : isDesc ? 'border-amber-200 bg-amber-50' : 'border-slate-200'}`}>
+                      <div key={i} className={`rounded-xl border p-3 space-y-2 ${isHeader ? 'border-blue-200 bg-blue-50' : isDesc ? 'border-amber-200 bg-amber-50' : task.type === 'fill_blank' ? 'border-green-200 bg-green-50' : task.type === 'matching' ? 'border-purple-200 bg-purple-50' : 'border-slate-200'}`}>
                         <div className="flex gap-2 items-start">
-                          <span className={`mt-2 text-xs font-bold px-1.5 py-0.5 rounded shrink-0 ${isHeader ? 'bg-blue-200 text-blue-700' : isDesc ? 'bg-amber-200 text-amber-700' : 'text-slate-400'}`}>
-                            {isHeader ? 'Заг.' : isDesc ? 'Опис' : `${num}.`}
+                          <span className={`mt-2 text-xs font-bold px-1.5 py-0.5 rounded shrink-0 ${isHeader ? 'bg-blue-200 text-blue-700' : isDesc ? 'bg-amber-200 text-amber-700' : task.type === 'fill_blank' ? 'bg-green-200 text-green-700' : task.type === 'matching' ? 'bg-purple-200 text-purple-700' : 'text-slate-400'}`}>
+                            {isHeader ? 'Заг.' : isDesc ? 'Опис' : task.type === 'fill_blank' ? 'Проп.' : task.type === 'matching' ? 'Відп.' : `${num}.`}
                           </span>
                           <div className="flex-1 space-y-1">
                             <div className="flex flex-wrap gap-1">
@@ -662,8 +681,45 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                           </div>
                         )}
 
-                        {/* Варіанти відповідей — тільки для завдань */}
+                        {/* Зображення — для task/fill_blank/matching */}
                         {!isHeader && !isDesc && (
+                          <div className="ml-7">
+                            {task.image_url ? (
+                              <div className="flex items-center gap-2">
+                                <img src={task.image_url} alt="" className="h-16 w-auto rounded-lg object-contain border border-slate-200" />
+                                <button
+                                  type="button"
+                                  onClick={() => setForm(p => { const tasks = [...p.tasks]; tasks[i] = { ...tasks[i], image_url: null }; return { ...p, tasks }; })}
+                                  className="text-xs text-red-500 hover:text-red-700"
+                                >
+                                  Видалити фото
+                                </button>
+                              </div>
+                            ) : (
+                              <label className="cursor-pointer text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1">
+                                <span>📎 Додати зображення</span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    if (!file) return;
+                                    const tok = sessionStorage.getItem('teacherToken') || '';
+                                    const fd = new FormData();
+                                    fd.append('file', file);
+                                    const res = await fetch('/api/upload-task-image', { method: 'POST', headers: { 'x-teacher-token': tok }, body: fd });
+                                    const d = await res.json();
+                                    if (d.ok) setForm(p => { const tasks = [...p.tasks]; tasks[i] = { ...tasks[i], image_url: d.url }; return { ...p, tasks }; });
+                                  }}
+                                />
+                              </label>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Варіанти відповідей — тільки для звичайних завдань */}
+                        {task.type === 'task' && (
                           <div className="ml-7">
                             <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-600">
                               <input
@@ -728,6 +784,105 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                             )}
                           </div>
                         )}
+
+                        {/* Заповни пропуск */}
+                        {task.type === 'fill_blank' && (
+                          <div className="ml-7 space-y-2">
+                            <div>
+                              <label className="text-xs font-medium text-slate-600">Шаблон (використовуйте [___] для пропусків):</label>
+                              <div className="mt-1 flex gap-2">
+                                <textarea
+                                  ref={(el) => { fillTemplateRefs.current[i] = el; }}
+                                  value={task.fillTemplate}
+                                  onChange={e => setForm(p => { const tasks = [...p.tasks]; tasks[i] = { ...tasks[i], fillTemplate: e.target.value }; return { ...p, tasks }; })}
+                                  rows={2}
+                                  placeholder="Наприклад: Столиця України — [___], а столиця Польщі — [___]"
+                                  className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-700 resize-none"
+                                />
+                                <button
+                                  type="button"
+                                  onMouseDown={e => {
+                                    e.preventDefault();
+                                    const ta = fillTemplateRefs.current[i];
+                                    if (ta) {
+                                      const start = ta.selectionStart || 0;
+                                      const end = ta.selectionEnd || 0;
+                                      const newVal = task.fillTemplate.slice(0, start) + '[___]' + task.fillTemplate.slice(end);
+                                      setForm(p => { const tasks = [...p.tasks]; tasks[i] = { ...tasks[i], fillTemplate: newVal }; return { ...p, tasks }; });
+                                      setTimeout(() => { ta.focus(); ta.setSelectionRange(start + 5, start + 5); }, 0);
+                                    }
+                                  }}
+                                  className="rounded-xl border border-slate-300 px-3 py-2 text-xs text-slate-600 hover:bg-slate-50 shrink-0"
+                                >
+                                  + [___]
+                                </button>
+                              </div>
+                            </div>
+                            {(task.fillTemplate.match(/\[___\]/g) || []).map((_, bi) => (
+                              <div key={bi} className="flex items-center gap-2">
+                                <span className="text-xs text-slate-500 shrink-0">Пропуск {bi + 1}:</span>
+                                <input
+                                  type="text"
+                                  value={task.fillAnswers[bi] || ''}
+                                  onChange={e => setForm(p => { const tasks = [...p.tasks]; const ans = [...(tasks[i].fillAnswers || [])]; ans[bi] = e.target.value; tasks[i] = { ...tasks[i], fillAnswers: ans }; return { ...p, tasks }; })}
+                                  placeholder="Правильна відповідь..."
+                                  className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm outline-none focus:border-slate-700"
+                                />
+                              </div>
+                            ))}
+                            {task.fillTemplate && (
+                              <div className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                                <span className="text-xs text-slate-400 mr-1">Прев&apos;ю: </span>
+                                {task.fillTemplate.split('[___]').map((seg, si, arr) => (
+                                  <span key={si}>
+                                    <MathText text={seg} />
+                                    {si < arr.length - 1 && <span className="inline-block w-24 border-b border-slate-400 mx-1 align-bottom" />}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Відповідність */}
+                        {task.type === 'matching' && (
+                          <div className="ml-7 space-y-2">
+                            <label className="text-xs font-medium text-slate-600">Пари для відповідності:</label>
+                            {task.matchingPairs.map((pair, pi) => (
+                              <div key={pi} className="flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  value={pair.left}
+                                  onChange={e => setForm(p => { const tasks = [...p.tasks]; const pairs = [...tasks[i].matchingPairs]; pairs[pi] = { ...pairs[pi], left: e.target.value }; tasks[i] = { ...tasks[i], matchingPairs: pairs }; return { ...p, tasks }; })}
+                                  placeholder="Ліва колонка..."
+                                  className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm outline-none focus:border-slate-700"
+                                />
+                                <span className="text-slate-400 shrink-0">↔</span>
+                                <input
+                                  type="text"
+                                  value={pair.right}
+                                  onChange={e => setForm(p => { const tasks = [...p.tasks]; const pairs = [...tasks[i].matchingPairs]; pairs[pi] = { ...pairs[pi], right: e.target.value }; tasks[i] = { ...tasks[i], matchingPairs: pairs }; return { ...p, tasks }; })}
+                                  placeholder="Права колонка..."
+                                  className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm outline-none focus:border-slate-700"
+                                />
+                                {task.matchingPairs.length > 2 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setForm(p => { const tasks = [...p.tasks]; tasks[i] = { ...tasks[i], matchingPairs: tasks[i].matchingPairs.filter((_, idx) => idx !== pi) }; return { ...p, tasks }; })}
+                                    className="text-red-400 hover:text-red-600"
+                                  >×</button>
+                                )}
+                              </div>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => setForm(p => { const tasks = [...p.tasks]; tasks[i] = { ...tasks[i], matchingPairs: [...tasks[i].matchingPairs, { left: '', right: '' }] }; return { ...p, tasks }; })}
+                              className="text-xs text-slate-400 hover:text-slate-600 underline"
+                            >
+                              + Додати пару
+                            </button>
+                          </div>
+                        )}
                       </div>
                         );
                       });
@@ -735,22 +890,34 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                   </div>
                   <div className="mt-3 flex gap-2 flex-wrap">
                     <button
-                      onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, { type: 'task' as const, text: '', hasChoices: false, choices: ['', '', '', ''], correctChoice: null, points: 1 }] }))}
+                      onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, { type: 'task' as const, text: '', hasChoices: false, choices: ['', '', '', ''], correctChoice: null, points: 1, image_url: null, fillTemplate: '', fillAnswers: [], matchingPairs: [] }] }))}
                       className="flex-1 rounded-xl border border-dashed border-slate-300 px-4 py-2 text-sm text-slate-500 hover:border-slate-500 hover:text-slate-700"
                     >
                       + Завдання
                     </button>
                     <button
-                      onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, { type: 'header' as const, text: '', hasChoices: false, choices: [], correctChoice: null, points: 1 }] }))}
+                      onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, { type: 'header' as const, text: '', hasChoices: false, choices: [], correctChoice: null, points: 1, image_url: null, fillTemplate: '', fillAnswers: [], matchingPairs: [] }] }))}
                       className="rounded-xl border border-dashed border-blue-300 px-4 py-2 text-sm text-blue-500 hover:border-blue-500 hover:text-blue-700"
                     >
                       + Заголовок
                     </button>
                     <button
-                      onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, { type: 'description' as const, text: '', hasChoices: false, choices: [], correctChoice: null, points: 1 }] }))}
+                      onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, { type: 'description' as const, text: '', hasChoices: false, choices: [], correctChoice: null, points: 1, image_url: null, fillTemplate: '', fillAnswers: [], matchingPairs: [] }] }))}
                       className="rounded-xl border border-dashed border-amber-300 px-4 py-2 text-sm text-amber-600 hover:border-amber-500 hover:text-amber-700"
                     >
                       + Опис/Інструкція
+                    </button>
+                    <button
+                      onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, { type: 'fill_blank' as const, text: '', hasChoices: false, choices: [], correctChoice: null, points: 1, image_url: null, fillTemplate: '', fillAnswers: [], matchingPairs: [] }] }))}
+                      className="rounded-xl border border-dashed border-green-300 px-4 py-2 text-sm text-green-600 hover:border-green-500 hover:text-green-700"
+                    >
+                      + Заповни пропуск
+                    </button>
+                    <button
+                      onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, { type: 'matching' as const, text: '', hasChoices: false, choices: [], correctChoice: null, points: 1, image_url: null, fillTemplate: '', fillAnswers: [], matchingPairs: [{ left: '', right: '' }, { left: '', right: '' }] }] }))}
+                      className="rounded-xl border border-dashed border-purple-300 px-4 py-2 text-sm text-purple-600 hover:border-purple-500 hover:text-purple-700"
+                    >
+                      + Відповідність
                     </button>
                   </div>
                 </div>

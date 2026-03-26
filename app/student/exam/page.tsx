@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useState, useRef } from 'react';
+import { Suspense, useEffect, useLayoutEffect, useMemo, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { works } from '@/data/works';
 import { StudentSession } from '@/types';
@@ -45,6 +45,15 @@ function ExamContent() {
 
   // Shuffle order: shuffleOrderRef[taskIndex] = [origIdx0, origIdx1, ...]
   const shuffleOrderRef = useRef<Record<number, number[]>>({});
+
+  // Matching state
+  const [matchingVersion, setMatchingVersion] = useState(0);
+  const matchingPendingRef = useRef<Record<number, number | null>>({});
+  const matchingShuffleRef = useRef<Record<number, { left: number[]; right: number[] }>>({});
+  const matchingLeftRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const matchingRightRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const matchingSvgRefs = useRef<Record<number, SVGSVGElement | null>>({});
+  const matchingContainerRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
   const noSleepRef = useRef<any>(null);
   const focusLostCountRef = useRef(0);
@@ -146,6 +155,13 @@ function ExamContent() {
       const choices: string[] = typeof task === 'string' ? [] : (task.choices || []);
       if (choices.length > 1) {
         order[i] = shuffleArray(choices.map((_: any, ci: number) => ci));
+      }
+      if (task.type === 'matching' && task.pairs?.length > 0) {
+        const n = task.pairs.length;
+        matchingShuffleRef.current[i] = {
+          left: shuffleArray(Array.from({ length: n }, (_, k) => k)),
+          right: shuffleArray(Array.from({ length: n }, (_, k) => k)),
+        };
       }
     });
     shuffleOrderRef.current = order;
@@ -365,6 +381,88 @@ function ExamContent() {
     };
   }, [sessionId, session]);
 
+  function handleMatchingLeftClick(taskIndex: number, origLeftIdx: number) {
+    if (!dbWork?.online_mode) return;
+    const current = matchingPendingRef.current[taskIndex];
+    if (current === origLeftIdx) {
+      matchingPendingRef.current[taskIndex] = null;
+    } else {
+      setAnswers(prev => {
+        const m: Record<string, string> = (() => { try { return JSON.parse(prev[taskIndex] ?? '{}'); } catch { return {}; } })();
+        const updated = { ...m };
+        delete updated[String(origLeftIdx)];
+        return { ...prev, [taskIndex]: JSON.stringify(updated) };
+      });
+      matchingPendingRef.current[taskIndex] = origLeftIdx;
+    }
+    setMatchingVersion(v => v + 1);
+  }
+
+  function handleMatchingRightClick(taskIndex: number, origRightIdx: number) {
+    if (!dbWork?.online_mode) return;
+    const pendingLeft = matchingPendingRef.current[taskIndex];
+    if (pendingLeft === null || pendingLeft === undefined) return;
+    setAnswers(prev => {
+      const m: Record<string, string> = (() => { try { return JSON.parse(prev[taskIndex] ?? '{}'); } catch { return {}; } })();
+      const updated = { ...m };
+      Object.keys(updated).forEach(k => { if (updated[k] === String(origRightIdx)) delete updated[k]; });
+      updated[String(pendingLeft)] = String(origRightIdx);
+      return { ...prev, [taskIndex]: JSON.stringify(updated) };
+    });
+    matchingPendingRef.current[taskIndex] = null;
+    setMatchingVersion(v => v + 1);
+  }
+
+  function redrawMatchingLines(taskIndex: number, currentAnswers: Record<number, string>) {
+    const svg = matchingSvgRefs.current[taskIndex];
+    const container = matchingContainerRefs.current[taskIndex];
+    if (!svg || !container) return;
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    const containerRect = container.getBoundingClientRect();
+    const mapping: Record<string, string> = (() => { try { return JSON.parse(currentAnswers[taskIndex] ?? '{}'); } catch { return {}; } })();
+    Object.entries(mapping).forEach(([leftIdx, rightIdx]) => {
+      const leftEl = matchingLeftRefs.current[`${taskIndex}-${leftIdx}`];
+      const rightEl = matchingRightRefs.current[`${taskIndex}-${rightIdx}`];
+      if (!leftEl || !rightEl) return;
+      const lRect = leftEl.getBoundingClientRect();
+      const rRect = rightEl.getBoundingClientRect();
+      const x1 = lRect.right - containerRect.left;
+      const y1 = lRect.top + lRect.height / 2 - containerRect.top;
+      const x2 = rRect.left - containerRect.left;
+      const y2 = rRect.top + rRect.height / 2 - containerRect.top;
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', String(x1));
+      line.setAttribute('y1', String(y1));
+      line.setAttribute('x2', String(x2));
+      line.setAttribute('y2', String(y2));
+      line.setAttribute('stroke', '#22c55e');
+      line.setAttribute('stroke-width', '2.5');
+      line.setAttribute('stroke-linecap', 'round');
+      svg.appendChild(line);
+    });
+  }
+
+  useLayoutEffect(() => {
+    if (!dbWork) return;
+    dbWork.tasks.forEach((task: any, i: number) => {
+      if ((task as any).type === 'matching') redrawMatchingLines(i, answers);
+    });
+  }, [answers, matchingVersion, dbWork]);
+
+  useEffect(() => {
+    if (!dbWork) return;
+    const observers: ResizeObserver[] = [];
+    dbWork.tasks.forEach((task: any, i: number) => {
+      if ((task as any).type !== 'matching') return;
+      const container = matchingContainerRefs.current[i];
+      if (!container) return;
+      const ro = new ResizeObserver(() => redrawMatchingLines(i, answers));
+      ro.observe(container);
+      observers.push(ro);
+    });
+    return () => observers.forEach(ro => ro.disconnect());
+  }, [dbWork, answers]);
+
   async function unlock() {
     if (!sessionId) return;
     const response = await fetch('/api/unlock-session', {
@@ -392,6 +490,18 @@ function ExamContent() {
       const taskType = typeof task === 'string' ? 'task' : (task.type ?? 'task');
       if (taskType === 'header' || taskType === 'description') return;
       taskNum++;
+      if (taskType === 'fill_blank') {
+        const blankCount = ((task.template as string || '').match(/\[___\]/g) || []).length;
+        const arr: string[] = (() => { try { return JSON.parse(answers[i] ?? '[]'); } catch { return []; } })();
+        if (arr.filter((s: string) => s.trim()).length < blankCount) skipped.push(taskNum);
+        return;
+      }
+      if (taskType === 'matching') {
+        const pairCount = (task.pairs as any[])?.length ?? 0;
+        const m: Record<string, string> = (() => { try { return JSON.parse(answers[i] ?? '{}'); } catch { return {}; } })();
+        if (Object.keys(m).length < pairCount) skipped.push(taskNum);
+        return;
+      }
       const choices: string[] = typeof task === 'string' ? [] : (task.choices || []);
       if (choices.length > 0 && !answers[i]) skipped.push(taskNum);
     });
@@ -526,6 +636,150 @@ function ExamContent() {
                 );
               }
 
+              if (taskType === 'fill_blank') {
+                taskNum++;
+                const segments = (task.template as string || '').split('[___]');
+                const currentFillAnswers: string[] = (() => { try { return JSON.parse(answers[index] ?? '[]'); } catch { return []; } })();
+                return (
+                  <div key={index} className={`rounded-2xl border p-4 shadow-sm md:rounded-3xl md:p-6 transition-colors ${dark ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'}`}>
+                    <div className="space-y-3 md:space-y-4">
+                      <div className={`flex h-10 w-10 items-center justify-center rounded-xl text-base font-bold text-white md:h-12 md:w-12 md:rounded-2xl md:text-lg ${dark ? 'bg-slate-600' : 'bg-slate-900'}`}>
+                        {taskNum}
+                      </div>
+                      {taskText && (
+                        <div className={`text-sm ${dark ? 'text-slate-400' : 'text-slate-600'}`}>
+                          <MathText text={taskText} />
+                        </div>
+                      )}
+                      {task.image_url && (
+                        <img src={task.image_url} alt="" className="max-h-56 w-auto rounded-xl object-contain" draggable={false} />
+                      )}
+                      <div className={`w-full rounded-xl px-4 py-3 md:rounded-2xl md:px-5 md:py-4 ${dark ? 'bg-slate-700 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
+                        <div className={`font-serif ${fontSizeClass} leading-loose`}>
+                          {segments.map((seg: string, si: number) => (
+                            <span key={si}>
+                              <MathText text={seg} />
+                              {si < segments.length - 1 && (
+                                <input
+                                  type="text"
+                                  value={currentFillAnswers[si] ?? ''}
+                                  onChange={e => {
+                                    if (!dbWork?.online_mode) return;
+                                    const arr = [...currentFillAnswers];
+                                    arr[si] = e.target.value;
+                                    setAnswers(prev => ({ ...prev, [index]: JSON.stringify(arr) }));
+                                  }}
+                                  readOnly={!dbWork?.online_mode}
+                                  className={`mx-1 inline-block w-28 border-b-2 bg-transparent px-1 text-center outline-none focus:border-blue-500 ${dark ? 'border-slate-400 text-white' : 'border-slate-500 text-slate-900'}`}
+                                />
+                              )}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      {!dbWork?.online_mode && (
+                        <div className={`mt-3 rounded-xl border border-dashed p-3 text-xs md:rounded-2xl md:p-4 md:text-sm ${dark ? 'border-slate-600 bg-slate-800 text-slate-500' : 'border-slate-300 bg-white text-slate-500'}`}>
+                          Відповідь записуйте на паперовому аркуші.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+
+              if (taskType === 'matching') {
+                taskNum++;
+                const shuffle = matchingShuffleRef.current[index] ?? {
+                  left: (task.pairs as any[]).map((_: any, k: number) => k),
+                  right: (task.pairs as any[]).map((_: any, k: number) => k),
+                };
+                const currentMapping: Record<string, string> = (() => { try { return JSON.parse(answers[index] ?? '{}'); } catch { return {}; } })();
+                const pendingLeft = matchingPendingRef.current[index];
+                return (
+                  <div key={index} className={`rounded-2xl border p-4 shadow-sm md:rounded-3xl md:p-6 transition-colors ${dark ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'}`}>
+                    <div className="space-y-3 md:space-y-4">
+                      <div className={`flex h-10 w-10 items-center justify-center rounded-xl text-base font-bold text-white md:h-12 md:w-12 md:rounded-2xl md:text-lg ${dark ? 'bg-slate-600' : 'bg-slate-900'}`}>
+                        {taskNum}
+                      </div>
+                      {taskText && (
+                        <div className={`text-sm ${dark ? 'text-slate-400' : 'text-slate-600'}`}>
+                          <MathText text={taskText} />
+                        </div>
+                      )}
+                      {task.image_url && (
+                        <img src={task.image_url} alt="" className="max-h-56 w-auto rounded-xl object-contain" draggable={false} />
+                      )}
+                      {dbWork?.online_mode && (
+                        <p className={`text-xs ${dark ? 'text-slate-500' : 'text-slate-400'}`}>
+                          Натисніть елемент з лівої колонки, потім елемент з правої — щоб встановити відповідність.
+                        </p>
+                      )}
+                      <div
+                        ref={el => { matchingContainerRefs.current[index] = el; }}
+                        className="relative"
+                      >
+                        <svg
+                          ref={el => { matchingSvgRefs.current[index] = el; }}
+                          className="pointer-events-none absolute inset-0 z-10 h-full w-full overflow-visible"
+                        />
+                        <div className="flex gap-4 md:gap-8">
+                          <div className="flex-1 space-y-2">
+                            {shuffle.left.map((origIdx: number) => {
+                              const pair = (task.pairs as any[])[origIdx];
+                              const isSelected = pendingLeft === origIdx;
+                              const isConnected = currentMapping[String(origIdx)] !== undefined;
+                              return (
+                                <div
+                                  key={origIdx}
+                                  ref={el => { matchingLeftRefs.current[`${index}-${origIdx}`] = el; }}
+                                  onClick={() => handleMatchingLeftClick(index, origIdx)}
+                                  className={`cursor-pointer rounded-xl border-2 px-3 py-2 text-sm transition select-none ${
+                                    isSelected
+                                      ? (dark ? 'border-blue-400 bg-blue-900/30 text-blue-200' : 'border-blue-500 bg-blue-50 text-blue-900')
+                                      : isConnected
+                                        ? (dark ? 'border-green-500 bg-green-900/30 text-green-200' : 'border-green-500 bg-green-50 text-green-900')
+                                        : (dark ? 'border-slate-600 bg-slate-700 text-slate-200 hover:border-slate-400' : 'border-slate-300 bg-white text-slate-900 hover:border-slate-400')
+                                  }`}
+                                >
+                                  <MathText text={pair.left} />
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div className="flex-1 space-y-2">
+                            {shuffle.right.map((origRightIdx: number) => {
+                              const pair = (task.pairs as any[])[origRightIdx];
+                              const isTarget = Object.values(currentMapping).includes(String(origRightIdx));
+                              return (
+                                <div
+                                  key={origRightIdx}
+                                  ref={el => { matchingRightRefs.current[`${index}-${origRightIdx}`] = el; }}
+                                  onClick={() => handleMatchingRightClick(index, origRightIdx)}
+                                  className={`cursor-pointer rounded-xl border-2 px-3 py-2 text-sm transition select-none ${
+                                    isTarget
+                                      ? (dark ? 'border-green-500 bg-green-900/30 text-green-200' : 'border-green-500 bg-green-50 text-green-900')
+                                      : pendingLeft !== null && pendingLeft !== undefined
+                                        ? (dark ? 'border-slate-500 bg-slate-700 text-slate-200 hover:border-blue-400 hover:bg-blue-900/20' : 'border-slate-300 bg-white text-slate-900 hover:border-blue-400 hover:bg-blue-50')
+                                        : (dark ? 'border-slate-600 bg-slate-700 text-slate-200' : 'border-slate-300 bg-white text-slate-900')
+                                  }`}
+                                >
+                                  <MathText text={pair.right} />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                      {!dbWork?.online_mode && (
+                        <div className={`mt-3 rounded-xl border border-dashed p-3 text-xs md:rounded-2xl md:p-4 md:text-sm ${dark ? 'border-slate-600 bg-slate-800 text-slate-500' : 'border-slate-300 bg-white text-slate-500'}`}>
+                          Відповідь записуйте на паперовому аркуші.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+
               taskNum++;
               const choices: string[] = typeof task === 'string' ? [] : (task.choices || []);
               const shuffledIndices = shuffleOrderRef.current[index] ?? choices.map((_: any, ci: number) => ci);
@@ -539,6 +793,9 @@ function ExamContent() {
                       {taskNum}
                     </div>
                     <div>
+                      {task.image_url && (
+                        <img src={task.image_url} alt="" className="mt-3 max-h-64 w-auto rounded-xl object-contain" draggable={false} />
+                      )}
                       <div className={`w-full rounded-xl px-4 py-3 md:rounded-2xl md:px-5 md:py-4 ${dark ? 'bg-slate-700 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
                         <div className={`font-serif ${fontSizeClass}`}>
                           <MathText text={taskText} />
