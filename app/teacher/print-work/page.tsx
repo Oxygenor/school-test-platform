@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { MathText } from '@/components/math-text';
 
 const CHOICE_LABELS = ['А', 'Б', 'В', 'Г', 'Д', 'Е'];
 
@@ -112,14 +113,14 @@ function PrintWorkContent() {
             if (taskType === 'header') {
               return (
                 <div key={i} className="break-inside-avoid pt-4 pb-1 text-center font-bold text-base border-b border-black">
-                  {text}
+                  <MathText text={text} />
                 </div>
               );
             }
             if (taskType === 'description') {
               return (
                 <div key={i} className="break-inside-avoid text-sm italic text-slate-700 leading-relaxed">
-                  {text}
+                  <MathText text={text} />
                 </div>
               );
             }
@@ -132,13 +133,13 @@ function PrintWorkContent() {
                 <div className="flex items-start gap-3">
                   <span className="shrink-0 font-bold">{taskNum}.</span>
                   <div className="flex-1">
-                    <div className="leading-relaxed">{text}</div>
+                    <div className="leading-relaxed"><MathText text={text} /></div>
                     {choices.length > 0 && (
                       <div className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1">
                         {choices.map((c, ci) => (
                           <div key={ci} className="flex items-center gap-2 text-sm">
                             <span className="font-bold">{CHOICE_LABELS[ci] ?? String.fromCharCode(65 + ci)})</span>
-                            <span>{c}</span>
+                            <MathText text={c} />
                           </div>
                         ))}
                       </div>
