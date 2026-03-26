@@ -387,9 +387,13 @@ function ExamContent() {
     if (!work || !dbWork?.online_mode) { setFinishConfirm(true); return; }
     // Перевіряємо пропущені завдання з варіантами відповідей
     const skipped: number[] = [];
+    let taskNum = 0;
     work.tasks.forEach((task: any, i: number) => {
+      const taskType = typeof task === 'string' ? 'task' : (task.type ?? 'task');
+      if (taskType === 'header' || taskType === 'description') return;
+      taskNum++;
       const choices: string[] = typeof task === 'string' ? [] : (task.choices || []);
-      if (choices.length > 0 && !answers[i]) skipped.push(i + 1);
+      if (choices.length > 0 && !answers[i]) skipped.push(taskNum);
     });
     if (skipped.length > 0) {
       setSkippedWarning(skipped);
@@ -498,58 +502,82 @@ function ExamContent() {
 
         {/* Завдання (select-none щоб не можна було виділити і скопіювати текст) */}
         <div className="mt-4 space-y-4 md:mt-8 md:space-y-5 select-none" onContextMenu={(e) => e.preventDefault()}>
-          {work.tasks.map((task: any, index: number) => {
-            const taskText = typeof task === 'string' ? task : task.text;
-            const choices: string[] = typeof task === 'string' ? [] : (task.choices || []);
-            const shuffledIndices = shuffleOrderRef.current[index] ?? choices.map((_: any, ci: number) => ci);
-            return (
-              <div
-                key={index}
-                className={`rounded-2xl border p-4 shadow-sm md:rounded-3xl md:p-6 transition-colors ${dark ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'}`}
-              >
-                <div className="space-y-3 md:space-y-4">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-xl text-base font-bold text-white md:h-12 md:w-12 md:rounded-2xl md:text-lg ${dark ? 'bg-slate-600' : 'bg-slate-900'}`}>
-                    {index + 1}
-                  </div>
-                  <div>
-                    <div className={`w-full rounded-xl px-4 py-3 md:rounded-2xl md:px-5 md:py-4 ${dark ? 'bg-slate-700 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
-                      <div className={`font-serif ${fontSizeClass}`}>
-                        <MathText text={taskText} />
-                      </div>
-                      {choices.length > 0 && (
-                        <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
-                          {shuffledIndices.map((origIdx: number, displayPos: number) => {
-                            const displayLabel = CHOICE_LABELS[displayPos] ?? String.fromCharCode(65 + displayPos);
-                            const origLabel = CHOICE_LABELS[origIdx] ?? String.fromCharCode(65 + origIdx);
-                            const isSelected = answers[index] === origLabel;
-                            const isOnline = dbWork?.online_mode;
-                            return (
-                              <div
-                                key={displayPos}
-                                onClick={() => isOnline ? setAnswers((prev) => ({ ...prev, [index]: isSelected ? '' : origLabel })) : undefined}
-                                className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${isOnline ? 'cursor-pointer' : ''} ${
-                                  isSelected
-                                    ? 'border-blue-500 bg-blue-500 text-white'
-                                    : dark
-                                      ? 'border-slate-500 bg-slate-600 text-slate-200 hover:bg-slate-500'
-                                      : 'border-slate-300 bg-white text-slate-800 hover:bg-slate-100'
-                                }`}
-                              >
-                                <span className="font-bold mr-1">{displayLabel})</span>{choices[origIdx]}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
+          {(() => {
+            let taskNum = 0;
+            return work.tasks.map((task: any, index: number) => {
+              const taskType = typeof task === 'string' ? 'task' : (task.type ?? 'task');
+              const taskText = typeof task === 'string' ? task : task.text;
+
+              if (taskType === 'header') {
+                return (
+                  <div key={index} className={`px-2 pt-4 pb-1 ${dark ? 'text-slate-200' : 'text-slate-900'}`}>
+                    <div className={`text-center font-bold text-lg border-b pb-2 ${dark ? 'border-slate-700' : 'border-slate-300'}`}>
+                      <MathText text={taskText} />
                     </div>
-                    <div className={`mt-3 rounded-xl border border-dashed p-3 text-xs md:rounded-2xl md:p-4 md:text-sm ${dark ? 'border-slate-600 bg-slate-800 text-slate-500' : 'border-slate-300 bg-white text-slate-500'}`}>
-                      Відповідь виконується на паперовому аркуші.
+                  </div>
+                );
+              }
+
+              if (taskType === 'description') {
+                return (
+                  <div key={index} className={`px-4 py-3 rounded-2xl text-sm italic ${dark ? 'bg-slate-800 text-slate-300' : 'bg-slate-50 text-slate-600'}`}>
+                    <MathText text={taskText} />
+                  </div>
+                );
+              }
+
+              taskNum++;
+              const choices: string[] = typeof task === 'string' ? [] : (task.choices || []);
+              const shuffledIndices = shuffleOrderRef.current[index] ?? choices.map((_: any, ci: number) => ci);
+              return (
+                <div
+                  key={index}
+                  className={`rounded-2xl border p-4 shadow-sm md:rounded-3xl md:p-6 transition-colors ${dark ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'}`}
+                >
+                  <div className="space-y-3 md:space-y-4">
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-xl text-base font-bold text-white md:h-12 md:w-12 md:rounded-2xl md:text-lg ${dark ? 'bg-slate-600' : 'bg-slate-900'}`}>
+                      {taskNum}
+                    </div>
+                    <div>
+                      <div className={`w-full rounded-xl px-4 py-3 md:rounded-2xl md:px-5 md:py-4 ${dark ? 'bg-slate-700 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
+                        <div className={`font-serif ${fontSizeClass}`}>
+                          <MathText text={taskText} />
+                        </div>
+                        {choices.length > 0 && (
+                          <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+                            {shuffledIndices.map((origIdx: number, displayPos: number) => {
+                              const displayLabel = CHOICE_LABELS[displayPos] ?? String.fromCharCode(65 + displayPos);
+                              const origLabel = CHOICE_LABELS[origIdx] ?? String.fromCharCode(65 + origIdx);
+                              const isSelected = answers[index] === origLabel;
+                              const isOnline = dbWork?.online_mode;
+                              return (
+                                <div
+                                  key={displayPos}
+                                  onClick={() => isOnline ? setAnswers((prev) => ({ ...prev, [index]: isSelected ? '' : origLabel })) : undefined}
+                                  className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${isOnline ? 'cursor-pointer' : ''} ${
+                                    isSelected
+                                      ? 'border-blue-500 bg-blue-500 text-white'
+                                      : dark
+                                        ? 'border-slate-500 bg-slate-600 text-slate-200 hover:bg-slate-500'
+                                        : 'border-slate-300 bg-white text-slate-800 hover:bg-slate-100'
+                                  }`}
+                                >
+                                  <span className="font-bold mr-1">{displayLabel})</span>{choices[origIdx]}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                      <div className={`mt-3 rounded-xl border border-dashed p-3 text-xs md:rounded-2xl md:p-4 md:text-sm ${dark ? 'border-slate-600 bg-slate-800 text-slate-500' : 'border-slate-300 bg-white text-slate-500'}`}>
+                        Відповідь виконується на паперовому аркуші.
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            });
+          })()}
         </div>
 
         {/* Кнопка завершення */}

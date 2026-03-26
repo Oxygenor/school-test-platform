@@ -103,35 +103,56 @@ function PrintWorkContent() {
 
       {/* Завдання */}
       <div className="space-y-6">
-        {work.tasks.map((task: any, i: number) => {
-          const text = typeof task === 'string' ? task : task.text;
-          const choices: string[] = typeof task === 'string' ? [] : (task.choices || []);
-          const pts: number = typeof task === 'string' ? 1 : (task.points ?? 1);
-          return (
-            <div key={i} className="break-inside-avoid">
-              <div className="flex items-start gap-3">
-                <span className="shrink-0 font-bold">{i + 1}.</span>
-                <div className="flex-1">
-                  <div className="leading-relaxed">{text}</div>
-                  {choices.length > 0 && (
-                    <div className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1">
-                      {choices.map((c, ci) => (
-                        <div key={ci} className="flex items-center gap-2 text-sm">
-                          <span className="font-bold">{CHOICE_LABELS[ci] ?? String.fromCharCode(65 + ci)})</span>
-                          <span>{c}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {choices.length === 0 && (
-                    <div className="mt-3 border-b border-dashed border-slate-400 pb-6" />
-                  )}
+        {(() => {
+          let taskNum = 0;
+          return work.tasks.map((task: any, i: number) => {
+            const taskType = typeof task === 'string' ? 'task' : (task.type ?? 'task');
+            const text = typeof task === 'string' ? task : task.text;
+
+            if (taskType === 'header') {
+              return (
+                <div key={i} className="break-inside-avoid pt-4 pb-1 text-center font-bold text-base border-b border-black">
+                  {text}
                 </div>
-                <div className="shrink-0 text-xs text-slate-400 no-print">{pts} б</div>
+              );
+            }
+            if (taskType === 'description') {
+              return (
+                <div key={i} className="break-inside-avoid text-sm italic text-slate-700 leading-relaxed">
+                  {text}
+                </div>
+              );
+            }
+
+            taskNum++;
+            const choices: string[] = typeof task === 'string' ? [] : (task.choices || []);
+            const pts: number = typeof task === 'string' ? 1 : (task.points ?? 1);
+            return (
+              <div key={i} className="break-inside-avoid">
+                <div className="flex items-start gap-3">
+                  <span className="shrink-0 font-bold">{taskNum}.</span>
+                  <div className="flex-1">
+                    <div className="leading-relaxed">{text}</div>
+                    {choices.length > 0 && (
+                      <div className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1">
+                        {choices.map((c, ci) => (
+                          <div key={ci} className="flex items-center gap-2 text-sm">
+                            <span className="font-bold">{CHOICE_LABELS[ci] ?? String.fromCharCode(65 + ci)})</span>
+                            <span>{c}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {choices.length === 0 && (
+                      <div className="mt-3 border-b border-dashed border-slate-400 pb-6" />
+                    )}
+                  </div>
+                  <div className="shrink-0 text-xs text-slate-400 no-print">{pts} б</div>
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          });
+        })()}
       </div>
     </div>
   );

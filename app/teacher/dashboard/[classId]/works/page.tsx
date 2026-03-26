@@ -13,7 +13,7 @@ const WORK_TYPES = [
   'Тематична контрольна робота',
 ];
 
-type StoredTask = string | { text: string; choices: string[]; correctChoice?: number; points?: number };
+type StoredTask = string | { text: string; choices: string[]; correctChoice?: number; points?: number } | { type: 'header' | 'description'; text: string };
 
 interface DbWork {
   id: string;
@@ -28,6 +28,7 @@ interface DbWork {
 }
 
 interface TaskForm {
+  type: 'task' | 'header' | 'description';
   text: string;
   hasChoices: boolean;
   choices: string[];
@@ -48,13 +49,18 @@ interface FormState {
 const CHOICE_LABELS = ['А', 'Б', 'В', 'Г', 'Д'];
 
 function taskToForm(t: StoredTask): TaskForm {
-  if (typeof t === 'string') return { text: t, hasChoices: false, choices: ['', '', '', ''], correctChoice: null, points: 1 };
-  const choices = [...(t.choices || [])];
+  if (typeof t === 'string') return { type: 'task', text: t, hasChoices: false, choices: ['', '', '', ''], correctChoice: null, points: 1 };
+  const a = t as any;
+  if (a.type === 'header') return { type: 'header', text: a.text, hasChoices: false, choices: [], correctChoice: null, points: 1 };
+  if (a.type === 'description') return { type: 'description', text: a.text, hasChoices: false, choices: [], correctChoice: null, points: 1 };
+  const choices = [...(a.choices || [])];
   while (choices.length < 4) choices.push('');
-  return { text: t.text, hasChoices: true, choices, correctChoice: t.correctChoice ?? null, points: t.points ?? 1 };
+  return { type: 'task', text: a.text, hasChoices: (a.choices?.length ?? 0) > 0, choices, correctChoice: a.correctChoice ?? null, points: a.points ?? 1 };
 }
 
 function formToTask(t: TaskForm): StoredTask {
+  if (t.type === 'header') return { type: 'header', text: t.text } as any;
+  if (t.type === 'description') return { type: 'description', text: t.text } as any;
   const filtered = t.choices.filter((c) => c.trim());
   if (t.hasChoices && filtered.length > 0) {
     const obj: any = { text: t.text, choices: filtered, points: t.points };
@@ -67,9 +73,10 @@ function formToTask(t: TaskForm): StoredTask {
   return t.text;
 }
 
-function parseTask(t: StoredTask): { text: string; choices: string[] } {
+function parseTask(t: StoredTask): { text: string; choices: string[]; type?: string } {
   if (typeof t === 'string') return { text: t, choices: [] };
-  return { text: t.text, choices: t.choices || [] };
+  const a = t as any;
+  return { text: a.text, choices: a.choices || [], type: a.type };
 }
 
 const emptyForm = (): FormState => ({
@@ -78,7 +85,7 @@ const emptyForm = (): FormState => ({
   workType: 'Самостійна робота',
   title: '',
   durationMinutes: 40,
-  tasks: [{ text: '', hasChoices: false, choices: ['', '', '', ''], correctChoice: null, points: 1 }],
+  tasks: [{ type: 'task' as const, text: '', hasChoices: false, choices: ['', '', '', ''], correctChoice: null, points: 1 }],
   onlineMode: false,
 });
 
@@ -147,7 +154,7 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
       workType: work.work_type,
       title: work.title,
       durationMinutes: work.duration_minutes,
-      tasks: work.tasks.length > 0 ? work.tasks.map(taskToForm) : [{ text: '', hasChoices: false, choices: ['', '', '', ''], correctChoice: null, points: 1 }],
+      tasks: work.tasks.length > 0 ? work.tasks.map(taskToForm) : [{ type: 'task' as const, text: '', hasChoices: false, choices: ['', '', '', ''], correctChoice: null, points: 1 }],
       onlineMode: work.online_mode ?? false,
     });
     setEditingWork(work);
@@ -586,10 +593,19 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                     </span>
                   </label>
                   <div className="space-y-4">
-                    {form.tasks.map((task, i) => (
-                      <div key={i} className="rounded-xl border border-slate-200 p-3 space-y-2">
-                        <div className="flex gap-2">
-                          <span className="mt-3 text-sm font-semibold text-slate-400 w-5 shrink-0">{i + 1}.</span>
+                    {(() => {
+                      let taskNum = 0;
+                      return form.tasks.map((task, i) => {
+                        const isHeader = task.type === 'header';
+                        const isDesc = task.type === 'description';
+                        if (!isHeader && !isDesc) taskNum++;
+                        const num = taskNum;
+                        return (
+                      <div key={i} className={`rounded-xl border p-3 space-y-2 ${isHeader ? 'border-blue-200 bg-blue-50' : isDesc ? 'border-amber-200 bg-amber-50' : 'border-slate-200'}`}>
+                        <div className="flex gap-2 items-start">
+                          <span className={`mt-2 text-xs font-bold px-1.5 py-0.5 rounded shrink-0 ${isHeader ? 'bg-blue-200 text-blue-700' : isDesc ? 'bg-amber-200 text-amber-700' : 'text-slate-400'}`}>
+                            {isHeader ? 'Заг.' : isDesc ? 'Опис' : `${num}.`}
+                          </span>
                           <div className="flex-1 space-y-1">
                             <div className="flex flex-wrap gap-1">
                               {MATH_BUTTONS.map((btn) => (
@@ -608,34 +624,34 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                               ref={(el) => { taskRefs.current[i] = el; }}
                               value={task.text}
                               onChange={(e) => updateTaskText(i, e.target.value)}
-                              rows={2}
-                              placeholder="Текст завдання..."
-                              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-700 resize-none"
+                              rows={isHeader ? 1 : 2}
+                              placeholder={isHeader ? 'Текст заголовку...' : isDesc ? 'Текст інструкції/опису...' : 'Текст завдання...'}
+                              className={`w-full rounded-xl border px-3 py-2 text-sm outline-none resize-none ${isHeader ? 'border-blue-300 focus:border-blue-500 font-bold' : isDesc ? 'border-amber-300 focus:border-amber-500 italic' : 'border-slate-300 focus:border-slate-700'}`}
                             />
                           </div>
-                          <div className="flex flex-col items-center gap-1 shrink-0">
-                            <label className="text-xs text-slate-400">балів</label>
-                            <input
-                              type="number"
-                              min={1}
-                              max={99}
-                              value={task.points}
-                              onChange={(e) => setForm((p) => {
-                                const tasks = [...p.tasks];
-                                tasks[i] = { ...tasks[i], points: Math.max(1, Number(e.target.value)) };
-                                return { ...p, tasks };
-                              })}
-                              className="w-14 rounded-lg border border-slate-300 px-2 py-1.5 text-center text-sm outline-none focus:border-slate-700"
-                            />
-                          </div>
-                          {form.tasks.length > 1 && (
-                            <button
-                              onClick={() => setForm((p) => ({ ...p, tasks: p.tasks.filter((_, idx) => idx !== i) }))}
-                              className="mt-1 text-red-400 hover:text-red-600 text-lg leading-none"
-                            >
-                              ×
-                            </button>
+                          {!isHeader && !isDesc && (
+                            <div className="flex flex-col items-center gap-1 shrink-0">
+                              <label className="text-xs text-slate-400">балів</label>
+                              <input
+                                type="number"
+                                min={1}
+                                max={99}
+                                value={task.points}
+                                onChange={(e) => setForm((p) => {
+                                  const tasks = [...p.tasks];
+                                  tasks[i] = { ...tasks[i], points: Math.max(1, Number(e.target.value)) };
+                                  return { ...p, tasks };
+                                })}
+                                className="w-14 rounded-lg border border-slate-300 px-2 py-1.5 text-center text-sm outline-none focus:border-slate-700"
+                              />
+                            </div>
                           )}
+                          <button
+                            onClick={() => setForm((p) => ({ ...p, tasks: p.tasks.filter((_, idx) => idx !== i) }))}
+                            className="mt-1 text-red-400 hover:text-red-600 text-lg leading-none shrink-0"
+                          >
+                            ×
+                          </button>
                         </div>
 
                         {/* Прев'ю */}
@@ -646,79 +662,97 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                           </div>
                         )}
 
-                        {/* Варіанти відповідей */}
-                        <div className="ml-7">
-                          <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-600">
-                            <input
-                              type="checkbox"
-                              checked={task.hasChoices}
-                              onChange={() => toggleTaskChoices(i)}
-                              className="rounded"
-                            />
-                            Варіанти відповідей
-                          </label>
+                        {/* Варіанти відповідей — тільки для завдань */}
+                        {!isHeader && !isDesc && (
+                          <div className="ml-7">
+                            <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-600">
+                              <input
+                                type="checkbox"
+                                checked={task.hasChoices}
+                                onChange={() => toggleTaskChoices(i)}
+                                className="rounded"
+                              />
+                              Варіанти відповідей
+                            </label>
 
-                          {task.hasChoices && (
-                            <div className="mt-2 space-y-2">
-                              {task.choices.map((choice, ci) => (
-                                <div key={ci} className="flex items-center gap-2">
-                                  <span className="text-xs font-bold text-slate-500 w-6">{CHOICE_LABELS[ci] ?? String.fromCharCode(65 + ci)})</span>
-                                  <input
-                                    type="text"
-                                    value={choice}
-                                    onChange={(e) => updateChoice(i, ci, e.target.value)}
-                                    placeholder={`Варіант ${ci + 1}...`}
-                                    className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm outline-none focus:border-slate-700"
-                                  />
-                                  {task.choices.length > 2 && (
-                                    <button onClick={() => removeChoice(i, ci)} className="text-red-400 hover:text-red-600 text-base">×</button>
-                                  )}
-                                </div>
-                              ))}
-                              {task.choices.length < 6 && (
-                                <button
-                                  onClick={() => addChoice(i)}
-                                  className="text-xs text-slate-400 hover:text-slate-600 underline"
-                                >
-                                  + Додати варіант
-                                </button>
-                              )}
-                              {form.onlineMode && task.choices.filter(c => c.trim()).length > 0 && (
-                                <div className="mt-2 pt-2 border-t border-slate-200">
-                                  <p className="text-xs font-medium text-slate-600 mb-1">Правильна відповідь:</p>
-                                  <div className="flex flex-wrap gap-2">
-                                    {task.choices.map((c, ci) => c.trim() ? (
-                                      <button
-                                        key={ci}
-                                        onClick={() => setForm((p) => {
-                                          const tasks = [...p.tasks];
-                                          tasks[i] = { ...tasks[i], correctChoice: task.correctChoice === ci ? null : ci };
-                                          return { ...p, tasks };
-                                        })}
-                                        className={`rounded-lg px-3 py-1 text-xs font-bold transition ${
-                                          task.correctChoice === ci
-                                            ? 'bg-green-500 text-white'
-                                            : 'border border-slate-300 text-slate-600 hover:bg-slate-100'
-                                        }`}
-                                      >
-                                        {CHOICE_LABELS[ci]}) {c}
-                                      </button>
-                                    ) : null)}
+                            {task.hasChoices && (
+                              <div className="mt-2 space-y-2">
+                                {task.choices.map((choice, ci) => (
+                                  <div key={ci} className="flex items-center gap-2">
+                                    <span className="text-xs font-bold text-slate-500 w-6">{CHOICE_LABELS[ci] ?? String.fromCharCode(65 + ci)})</span>
+                                    <input
+                                      type="text"
+                                      value={choice}
+                                      onChange={(e) => updateChoice(i, ci, e.target.value)}
+                                      placeholder={`Варіант ${ci + 1}...`}
+                                      className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm outline-none focus:border-slate-700"
+                                    />
+                                    {task.choices.length > 2 && (
+                                      <button onClick={() => removeChoice(i, ci)} className="text-red-400 hover:text-red-600 text-base">×</button>
+                                    )}
                                   </div>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
+                                ))}
+                                {task.choices.length < 6 && (
+                                  <button
+                                    onClick={() => addChoice(i)}
+                                    className="text-xs text-slate-400 hover:text-slate-600 underline"
+                                  >
+                                    + Додати варіант
+                                  </button>
+                                )}
+                                {form.onlineMode && task.choices.filter(c => c.trim()).length > 0 && (
+                                  <div className="mt-2 pt-2 border-t border-slate-200">
+                                    <p className="text-xs font-medium text-slate-600 mb-1">Правильна відповідь:</p>
+                                    <div className="flex flex-wrap gap-2">
+                                      {task.choices.map((c, ci) => c.trim() ? (
+                                        <button
+                                          key={ci}
+                                          onClick={() => setForm((p) => {
+                                            const tasks = [...p.tasks];
+                                            tasks[i] = { ...tasks[i], correctChoice: task.correctChoice === ci ? null : ci };
+                                            return { ...p, tasks };
+                                          })}
+                                          className={`rounded-lg px-3 py-1 text-xs font-bold transition ${
+                                            task.correctChoice === ci
+                                              ? 'bg-green-500 text-white'
+                                              : 'border border-slate-300 text-slate-600 hover:bg-slate-100'
+                                          }`}
+                                        >
+                                          {CHOICE_LABELS[ci]}) {c}
+                                        </button>
+                                      ) : null)}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                    ))}
+                        );
+                      });
+                    })()}
                   </div>
-                  <button
-                    onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, { text: '', hasChoices: false, choices: ['', '', '', ''], correctChoice: null, points: 1 }] }))}
-                    className="mt-3 rounded-xl border border-dashed border-slate-300 px-4 py-2 text-sm text-slate-500 hover:border-slate-500 hover:text-slate-700 w-full"
-                  >
-                    + Додати завдання
-                  </button>
+                  <div className="mt-3 flex gap-2 flex-wrap">
+                    <button
+                      onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, { type: 'task' as const, text: '', hasChoices: false, choices: ['', '', '', ''], correctChoice: null, points: 1 }] }))}
+                      className="flex-1 rounded-xl border border-dashed border-slate-300 px-4 py-2 text-sm text-slate-500 hover:border-slate-500 hover:text-slate-700"
+                    >
+                      + Завдання
+                    </button>
+                    <button
+                      onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, { type: 'header' as const, text: '', hasChoices: false, choices: [], correctChoice: null, points: 1 }] }))}
+                      className="rounded-xl border border-dashed border-blue-300 px-4 py-2 text-sm text-blue-500 hover:border-blue-500 hover:text-blue-700"
+                    >
+                      + Заголовок
+                    </button>
+                    <button
+                      onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, { type: 'description' as const, text: '', hasChoices: false, choices: [], correctChoice: null, points: 1 }] }))}
+                      className="rounded-xl border border-dashed border-amber-300 px-4 py-2 text-sm text-amber-600 hover:border-amber-500 hover:text-amber-700"
+                    >
+                      + Опис/Інструкція
+                    </button>
+                  </div>
                 </div>
 
               </div>
