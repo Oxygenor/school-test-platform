@@ -99,6 +99,8 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
   const [copyError, setCopyError] = useState('');
   const [copySuccess, setCopySuccess] = useState('');
 
+  const taskRefs = useRef<(HTMLTextAreaElement | null)[]>([]);
+
   const [editingWork, setEditingWork] = useState<DbWork | null | 'new'>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
   const [saving, setSaving] = useState(false);
@@ -231,6 +233,49 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
     );
     const data = await res.json();
     if (data.ok) fetchWorks();
+  }
+
+  const MATH_BUTTONS = [
+    { label: '$…$', title: 'Обгорнути у $', snippet: '$WRAP$', cursor: 0 },
+    { label: 'a/b', title: 'Дріб \\frac{}{}', snippet: '\\frac{}{}', cursor: 6 },
+    { label: '√x', title: 'Корінь \\sqrt{}', snippet: '\\sqrt{}', cursor: 6 },
+    { label: 'xⁿ', title: 'Степінь ^{}', snippet: '^{}', cursor: 2 },
+    { label: '·', title: 'Крапка множення', snippet: '\\cdot ', cursor: 6 },
+    { label: '≤', title: 'Менше або рівне', snippet: '\\leq ', cursor: 5 },
+    { label: '≥', title: 'Більше або рівне', snippet: '\\geq ', cursor: 5 },
+    { label: '±', title: 'Плюс-мінус', snippet: '\\pm ', cursor: 4 },
+    { label: 'π', title: 'Пі', snippet: '\\pi ', cursor: 4 },
+    { label: '∞', title: 'Нескінченність', snippet: '\\infty ', cursor: 7 },
+  ];
+
+  function insertMath(taskIndex: number, snippet: string, cursorOffset: number) {
+    const textarea = taskRefs.current[taskIndex];
+    if (!textarea) return;
+    const start = textarea.selectionStart ?? 0;
+    const end = textarea.selectionEnd ?? 0;
+    const before = textarea.value.slice(0, start);
+    const selected = textarea.value.slice(start, end);
+    const after = textarea.value.slice(end);
+    let newText: string;
+    let cursorPos: number;
+    if (snippet === '$WRAP$') {
+      newText = selected
+        ? before + '$' + selected + '$' + after
+        : before + '$$' + after;
+      cursorPos = selected ? end + 2 : start + 1;
+    } else {
+      newText = before + snippet + after;
+      cursorPos = start + cursorOffset;
+    }
+    setForm((prev) => {
+      const tasks = [...prev.tasks];
+      tasks[taskIndex] = { ...tasks[taskIndex], text: newText };
+      return { ...prev, tasks };
+    });
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(cursorPos, cursorPos);
+    }, 0);
   }
 
   function updateTaskText(index: number, value: string) {
@@ -545,13 +590,29 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                       <div key={i} className="rounded-xl border border-slate-200 p-3 space-y-2">
                         <div className="flex gap-2">
                           <span className="mt-3 text-sm font-semibold text-slate-400 w-5 shrink-0">{i + 1}.</span>
-                          <textarea
-                            value={task.text}
-                            onChange={(e) => updateTaskText(i, e.target.value)}
-                            rows={2}
-                            placeholder="Текст завдання..."
-                            className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-700 resize-none"
-                          />
+                          <div className="flex-1 space-y-1">
+                            <div className="flex flex-wrap gap-1">
+                              {MATH_BUTTONS.map((btn) => (
+                                <button
+                                  key={btn.label}
+                                  type="button"
+                                  title={btn.title}
+                                  onMouseDown={(e) => { e.preventDefault(); insertMath(i, btn.snippet, btn.cursor); }}
+                                  className="rounded px-2 py-0.5 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200"
+                                >
+                                  {btn.label}
+                                </button>
+                              ))}
+                            </div>
+                            <textarea
+                              ref={(el) => { taskRefs.current[i] = el; }}
+                              value={task.text}
+                              onChange={(e) => updateTaskText(i, e.target.value)}
+                              rows={2}
+                              placeholder="Текст завдання..."
+                              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-700 resize-none"
+                            />
+                          </div>
                           <div className="flex flex-col items-center gap-1 shrink-0">
                             <label className="text-xs text-slate-400">балів</label>
                             <input
