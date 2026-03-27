@@ -953,7 +953,7 @@ function ExamContent() {
       )}
 
       {/* Вчитель завершив роботу для всіх */}
-      {examEnded && (
+      {examEnded && !scoreResults && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 p-4">
           <div className="w-full max-w-lg rounded-2xl bg-white p-8 shadow-2xl text-center">
             <div className="text-4xl mb-4">✋</div>

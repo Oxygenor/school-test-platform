@@ -182,7 +182,13 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
 
   function getMaxScore(work: DbWork | null): number {
     if (!work) return 0;
-    return work.tasks.reduce((sum: number, t: any) => sum + (typeof t === 'string' ? 1 : (t.points ?? 1)), 0);
+    return work.tasks.reduce((sum: number, t: any) => {
+      const type = typeof t === 'string' ? 'task' : (t.type ?? 'task');
+      if (type === 'header' || type === 'description') return sum;
+      if (type === 'fill_blank') return sum + (t.points ?? 1) * (t.answers?.length ?? 1);
+      if (type === 'matching') return sum + (t.points ?? 1) * (t.pairs?.length ?? 1);
+      return sum + (typeof t === 'string' ? 1 : (t.points ?? 1));
+    }, 0);
   }
 
   function statusLabel(status: string) {
@@ -504,39 +510,41 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
                 <p className="text-slate-400">Роботу не знайдено в базі.</p>
               ) : (
                 <div className="space-y-2">
-                  {work.tasks.map((task, i) => {
-                    const taskObj = typeof task === 'string' ? null : task as { text: string; choices?: string[]; correctChoice?: number; points?: number };
-                    const correctLabel = taskObj?.correctChoice !== undefined && taskObj?.choices
-                      ? CHOICE_LABELS[taskObj.correctChoice] ?? null
-                      : null;
-                    const taskPoints = taskObj?.points ?? 1;
-                    const studentAnswer = (answersStudent.answers ?? {})[i];
-                    const isCorrect = correctLabel !== null && studentAnswer === correctLabel;
-                    const isWrong = correctLabel !== null && studentAnswer && studentAnswer !== correctLabel;
-                    return (
-                      <div key={i} className={`flex items-center justify-between rounded-xl px-3 py-2 text-sm ${isCorrect ? 'bg-green-50' : isWrong ? 'bg-red-50' : 'bg-slate-50'}`}>
-                        <span className="font-semibold text-slate-400 mr-2">{i + 1}.</span>
-                        <span className="flex-1 text-slate-700 truncate">{typeof task === 'string' ? task : (task as { text: string }).text}</span>
-                        <div className="ml-3 flex items-center gap-2 shrink-0">
-                          {correctLabel && <span className="text-xs text-slate-400">{taskPoints} б</span>}
-                          {studentAnswer ? (
-                            <span className={`font-bold ${isCorrect ? 'text-green-600' : isWrong ? 'text-red-600' : 'text-slate-600'}`}>{studentAnswer}</span>
-                          ) : (
-                            <span className="text-slate-300">—</span>
-                          )}
-                          {correctLabel && (
-                            <>
-                              {isCorrect ? (
-                                <span className="text-green-600">✓</span>
-                              ) : (
-                                <span className="text-slate-400 text-xs">({correctLabel})</span>
-                              )}
-                            </>
-                          )}
+                  {(() => {
+                    let num = 0;
+                    return work.tasks.map((task, i) => {
+                      const type = typeof task === 'string' ? 'task' : ((task as any).type ?? 'task');
+                      if (type === 'header' || type === 'description') return null;
+                      num++;
+                      const taskObj = typeof task === 'string' ? null : task as any;
+                      const correctLabel = taskObj?.correctChoice !== undefined && taskObj?.choices
+                        ? CHOICE_LABELS[taskObj.correctChoice] ?? null
+                        : null;
+                      const taskPoints = taskObj?.points ?? 1;
+                      const studentAnswer = (answersStudent.answers ?? {})[i];
+                      const isCorrect = correctLabel !== null && studentAnswer === correctLabel;
+                      const isWrong = correctLabel !== null && studentAnswer && studentAnswer !== correctLabel;
+                      return (
+                        <div key={i} className={`flex items-center justify-between rounded-xl px-3 py-2 text-sm ${isCorrect ? 'bg-green-50' : isWrong ? 'bg-red-50' : 'bg-slate-50'}`}>
+                          <span className="font-semibold text-slate-400 mr-2">{num}.</span>
+                          <span className="flex-1 text-slate-700 truncate">{typeof task === 'string' ? task : (task as any).text}</span>
+                          <div className="ml-3 flex items-center gap-2 shrink-0">
+                            {correctLabel && <span className="text-xs text-slate-400">{taskPoints} б</span>}
+                            {studentAnswer ? (
+                              <span className={`font-bold ${isCorrect ? 'text-green-600' : isWrong ? 'text-red-600' : 'text-slate-600'}`}>{studentAnswer}</span>
+                            ) : (
+                              <span className="text-slate-300">—</span>
+                            )}
+                            {correctLabel && (
+                              isCorrect
+                                ? <span className="text-green-600">✓</span>
+                                : <span className="text-slate-400 text-xs">({correctLabel})</span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    });
+                  })()}
                 </div>
               )}
             </div>
@@ -563,11 +571,20 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
                 <>
                   <div className="mb-3 font-semibold">{work.title} <span className="font-normal text-slate-400">· {work.work_type}</span></div>
                   <div className="space-y-2">
-                    {work.tasks.map((task, i) => (
-                      <div key={i} className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                        <span className="font-semibold text-slate-400 mr-2">{i + 1}.</span>{typeof task === 'string' ? task : (task as any).text}
-                      </div>
-                    ))}
+                    {(() => {
+                      let num = 0;
+                      return work.tasks.map((task, i) => {
+                        const type = typeof task === 'string' ? 'task' : ((task as any).type ?? 'task');
+                        if (type === 'header' || type === 'description') return null;
+                        num++;
+                        return (
+                          <div key={i} className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                            <span className="font-semibold text-slate-400 mr-2">{num}.</span>
+                            {typeof task === 'string' ? task : (task as any).text}
+                          </div>
+                        );
+                      });
+                    })()}
                   </div>
                 </>
               )}
