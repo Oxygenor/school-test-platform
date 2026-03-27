@@ -10,7 +10,7 @@ export async function GET(req: Request) {
 
   const { data, error } = await supabaseAdmin
     .from('teacher_classes')
-    .select('class_id, classes!inner(class_key)')
+    .select('class_id')
     .eq('teacher_id', teacher.id)
     .order('class_id');
 
@@ -18,10 +18,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
 
-  const classes = data.map((c) => ({
-    classId: c.class_id,
-    classKey: (c.classes as any)?.class_key ?? '',
-  }));
+  const classes = data.map((c) => ({ classId: c.class_id }));
 
   return NextResponse.json({ ok: true, classes });
 }
@@ -32,13 +29,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { classId, classKey } = await req.json();
+  const { classId } = await req.json();
   const id = Number(classId);
   if (!id || id < 1 || id > 12) {
     return NextResponse.json({ ok: false, error: 'Введіть номер від 1 до 12' }, { status: 400 });
-  }
-  if (!classKey?.trim()) {
-    return NextResponse.json({ ok: false, error: 'Введіть ключ класу' }, { status: 400 });
   }
 
   // Перевіряємо конфлікт предметів
@@ -69,20 +63,15 @@ export async function POST(req: Request) {
     }
   }
 
-  // Якщо клас вже існує — не змінюємо ключ (він спільний для всіх вчителів класу)
+  // Якщо клас вже існує — просто додаємо зв'язок, інакше створюємо
   const { data: existingClass } = await supabaseAdmin
     .from('classes')
-    .select('id, class_key')
+    .select('id')
     .eq('id', id)
     .single();
 
-  if (existingClass) {
-    // Клас вже є — просто додаємо зв'язок вчитель-клас
-  } else {
-    // Новий клас — зберігаємо з ключем
-    await supabaseAdmin
-      .from('classes')
-      .insert({ id, class_key: classKey.trim() });
+  if (!existingClass) {
+    await supabaseAdmin.from('classes').insert({ id });
   }
 
   const { error } = await supabaseAdmin
@@ -103,8 +92,7 @@ export async function POST(req: Request) {
       { onConflict: 'teacher_id,class_id' }
     );
 
-  const key = existingClass?.class_key ?? classKey.trim();
-  return NextResponse.json({ ok: true, classKey: key });
+  return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(req: Request) {

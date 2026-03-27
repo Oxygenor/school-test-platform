@@ -7,7 +7,6 @@ import { Card, PageContainer, Title } from '@/components/ui';
 
 interface ClassStatus {
   classId: number;
-  classKey: string;
   active: boolean;
   loading: boolean;
   showKey: boolean;
@@ -20,7 +19,6 @@ export default function TeacherDashboardPage() {
   const [teacherName, setTeacherName] = useState('');
   const [statuses, setStatuses] = useState<ClassStatus[]>([]);
   const [newClassId, setNewClassId] = useState('');
-  const [newClassKey, setNewClassKey] = useState('');
   const [addError, setAddError] = useState('');
   const [addLoading, setAddLoading] = useState(false);
 
@@ -39,12 +37,12 @@ export default function TeacherDashboardPage() {
     if (!data.ok) return;
 
     const results = await Promise.all(
-      data.classes.map(async ({ classId, classKey }: { classId: number; classKey: string }) => {
+      data.classes.map(async ({ classId }: { classId: number }) => {
         const r = await fetch(`/api/exam-status?classId=${classId}`, {
           headers: { 'x-teacher-token': t },
         });
         const d = await r.json();
-        return { classId, classKey, active: d.active ?? false, loading: false, showKey: false, sessionCode: d.session_code ?? null };
+        return { classId, active: d.active ?? false, loading: false, showKey: false, sessionCode: d.session_code ?? null };
       })
     );
     setStatuses(results);
@@ -69,20 +67,18 @@ export default function TeacherDashboardPage() {
     setAddError('');
     const id = Number(newClassId);
     if (!id || id < 1 || id > 12) { setAddError('Введіть номер від 1 до 12'); return; }
-    if (!newClassKey.trim()) { setAddError('Введіть ключ класу для учнів'); return; }
     if (statuses.some((s) => s.classId === id)) { setAddError('Цей клас вже є'); return; }
     setAddLoading(true);
     const res = await fetch('/api/classes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-teacher-token': token },
-      body: JSON.stringify({ classId: id, classKey: newClassKey.trim() }),
+      body: JSON.stringify({ classId: id }),
     });
     const data = await res.json();
     setAddLoading(false);
     if (!data.ok) { setAddError(data.error ?? 'Помилка'); return; }
     setNewClassId('');
-    setNewClassKey('');
-    setStatuses((prev) => [...prev, { classId: id, classKey: data.classKey, active: false, loading: false, showKey: false, sessionCode: null }].sort((a, b) => a.classId - b.classId));
+    setStatuses((prev) => [...prev, { classId: id, active: false, loading: false, showKey: false, sessionCode: null }].sort((a, b) => a.classId - b.classId));
   }
 
   async function deleteClass(classId: number) {
@@ -131,13 +127,6 @@ export default function TeacherDashboardPage() {
               placeholder="Номер класу"
               className="w-36 rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-700"
             />
-            <input
-              type="text" value={newClassKey}
-              onChange={(e) => { setNewClassKey(e.target.value); setAddError(''); }}
-              onKeyDown={(e) => e.key === 'Enter' && addClass()}
-              placeholder="Ключ для учнів"
-              className="w-48 rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-700"
-            />
             <button
               onClick={addClass} disabled={addLoading}
               className="rounded-2xl bg-slate-900 px-5 py-3 text-sm text-white hover:bg-slate-700 disabled:opacity-50"
@@ -146,12 +135,11 @@ export default function TeacherDashboardPage() {
             </button>
           </div>
           {addError && <p className="mt-2 text-sm text-red-600">{addError}</p>}
-          <p className="mt-2 text-xs text-slate-400">Ключ учні вводять при вході щоб підтвердити свій клас</p>
         </Card>
 
         {/* Класи */}
         <div className="grid gap-4 md:grid-cols-3">
-          {statuses.map(({ classId, classKey, active, loading, showKey, sessionCode }) => (
+          {statuses.map(({ classId, active, loading, showKey, sessionCode }) => (
             <Card key={classId}>
               <div className="flex items-center justify-between">
                 <span className="text-2xl font-bold">{classId} клас</span>

@@ -395,16 +395,10 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
               <div className="grid gap-4 md:grid-cols-2">
                 {subjectWorks.sort((a, b) => a.variant - b.variant).map((work) => (
                   <Card key={work.id}>
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <div className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-                          Варіант {work.variant}
-                        </div>
-                        <div className="mt-1 font-bold text-slate-900">{work.title}</div>
-                        <div className="mt-1 text-sm text-slate-500">
-                          {work.work_type} · {work.duration_minutes} хв · {work.tasks.length} завдань
-                        </div>
-                      </div>
+                    <div className="flex items-center gap-2 flex-wrap mb-3">
+                      <span className="text-xs font-semibold uppercase tracking-widest text-slate-500 mr-auto">
+                        Варіант {work.variant}
+                      </span>
                       <div className="flex gap-2 shrink-0">
                         <button
                           onClick={() => openEdit(work)}
@@ -433,6 +427,10 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                           Видалити
                         </button>
                       </div>
+                    </div>
+                    <div className="font-bold text-slate-900">{work.title}</div>
+                    <div className="mt-1 text-sm text-slate-500">
+                      {work.work_type} · {work.duration_minutes} хв · {work.tasks.length} завдань
                     </div>
 
                     {work.tasks.length > 0 && (
