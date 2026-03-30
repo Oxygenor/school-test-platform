@@ -19,6 +19,7 @@ export default function StudentRegisterPage() {
   const [verifyingCode, setVerifyingCode] = useState(false);
 
   const [classId, setClassId] = useState<number | null>(null);
+  const [className, setClassName] = useState('');
   const [teacherId, setTeacherId] = useState('');
   const [teacherName, setTeacherName] = useState('');
 
@@ -55,6 +56,7 @@ export default function StudentRegisterPage() {
     if (!data.ok) { setCodeError(data.error || 'Невірний код'); return; }
 
     setClassId(data.classId);
+    setClassName(data.className ?? String(data.classId));
     setTeacherId(data.teacherId);
     setTeacherName(data.teacherName);
 
@@ -110,7 +112,7 @@ export default function StudentRegisterPage() {
             // Крок 2: Вибір імені
             <div className="mt-6 space-y-4">
               <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
-                <div>Клас: <strong>{classId}</strong></div>
+                <div>Клас: <strong>{className}</strong></div>
                 <div>Вчитель: <strong>{teacherName}</strong></div>
               </div>
               <div>
@@ -132,7 +134,7 @@ export default function StudentRegisterPage() {
               </Button>
               <Button
                 className="w-full bg-slate-200 text-slate-900 hover:bg-slate-300"
-                onClick={() => { setClassId(null); setCode(''); setStudents([]); setSelectedStudentId(''); }}
+                onClick={() => { setClassId(null); setClassName(''); setCode(''); setStudents([]); setSelectedStudentId(''); }}
               >
                 Змінити код
               </Button>

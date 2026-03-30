@@ -25,6 +25,7 @@ function ExamContent() {
   const params = useSearchParams();
   const sessionId = params.get('sessionId');
 
+  const [showSignReminder, setShowSignReminder] = useState(true);
   const [session, setSession] = useState<StudentSession | null>(null);
   const [dbWork, setDbWork] = useState<{ work_type: string; title: string; duration_minutes: number; tasks: any[]; online_mode: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -548,6 +549,52 @@ function ExamContent() {
     return (
       <div className="min-h-screen bg-slate-50 p-4">
         <div className="mx-auto max-w-3xl text-center text-slate-600">Сесію не знайдено.</div>
+      </div>
+    );
+  }
+
+  const UA_LETTERS = 'абвгґдеєжзиіїйклмнопрстуфхцчшщьюя';
+  function idToClassName(id: number): string {
+    if (id >= 1 && id <= 12) return String(id);
+    const num = Math.floor(id / 100);
+    const li = (id % 100) - 1;
+    return li >= 0 && li < UA_LETTERS.length ? `${num}${UA_LETTERS[li]}` : String(id);
+  }
+
+  if (showSignReminder) {
+    const subjectLower = (session.subject || 'предмету').toLowerCase();
+    const className = idToClassName(session.class_id);
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
+        <p className="text-white text-xl font-semibold mb-2">✏️ Перш ніж почати</p>
+        <p className="text-slate-400 text-sm mb-6">Підпишіть листочок як показано нижче</p>
+
+        {/* Імітація листочка зошита */}
+        <div className="relative w-full max-w-sm bg-white shadow-2xl rounded-sm" style={{ minHeight: '320px' }}>
+          {/* Сині горизонтальні лінії */}
+          {Array.from({ length: 15 }).map((_, i) => (
+            <div key={i} className="absolute left-0 right-0 border-b border-blue-100" style={{ top: `${24 + i * 22}px` }} />
+          ))}
+          {/* Червоне поле справа */}
+          <div className="absolute top-0 bottom-0 right-12 w-px bg-red-400" />
+
+          {/* Текст підпису по центру */}
+          <div className="absolute inset-0 flex items-center justify-center pr-14">
+            <div className="text-center text-slate-800 leading-8 text-[15px]">
+              <div>{work.workType}</div>
+              <div>з {subjectLower}</div>
+              <div>учня/учениці {className} класу</div>
+              <div className="font-semibold mt-1">{session.full_name}</div>
+            </div>
+          </div>
+        </div>
+
+        <button
+          onClick={() => setShowSignReminder(false)}
+          className="mt-8 w-full max-w-sm rounded-2xl bg-green-500 py-4 text-white font-bold text-lg hover:bg-green-600 transition-colors"
+        >
+          Підписав(ла) — починаємо ✓
+        </button>
       </div>
     );
   }

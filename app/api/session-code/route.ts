@@ -1,6 +1,18 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 
+const UA_LETTERS = 'абвгґдеєжзиіїйклмнопрстуфхцчшщьюя';
+
+function idToClassName(id: number): string {
+  if (id >= 1 && id <= 12) return String(id);
+  const num = Math.floor(id / 100);
+  const letterIdx = (id % 100) - 1;
+  if (letterIdx >= 0 && letterIdx < UA_LETTERS.length) {
+    return `${num}${UA_LETTERS[letterIdx]}`;
+  }
+  return String(id);
+}
+
 // Учень перевіряє 6-значний код і отримує classId + teacherId
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -24,6 +36,7 @@ export async function GET(req: Request) {
   return NextResponse.json({
     ok: true,
     classId: data.class_id,
+    className: idToClassName(data.class_id),
     teacherId: data.teacher_id,
     teacherName: (data.teachers as any)?.name ?? '',
   });

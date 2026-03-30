@@ -107,10 +107,20 @@ const emptyForm = (): FormState => ({
   onlineMode: false,
 });
 
+const UA_LETTERS = 'абвгґдеєжзиіїйклмнопрстуфхцчшщьюя';
+function idToClassName(id: number): string {
+  if (id >= 1 && id <= 12) return String(id);
+  const num = Math.floor(id / 100);
+  const letterIdx = (id % 100) - 1;
+  if (letterIdx >= 0 && letterIdx < UA_LETTERS.length) return `${num}${UA_LETTERS[letterIdx]}`;
+  return String(id);
+}
+
 export default function WorksPage({ params }: { params: Promise<{ classId: string }> }) {
   const { classId } = use(params);
   const router = useRouter();
   const numericClassId = Number(classId);
+  const displayClassName = idToClassName(numericClassId);
 
   const [works, setWorks] = useState<DbWork[]>([]);
   const [loading, setLoading] = useState(true);
@@ -359,7 +369,7 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
 
         <div className="flex items-center justify-between">
           <div>
-            <Title>{numericClassId} клас — Роботи</Title>
+            <Title>{displayClassName} клас — Роботи</Title>
             <p className="mt-1 text-slate-500 text-sm">
               Для дробів: <code className="bg-slate-100 px-1 rounded">$\frac{'{2}'}{'{3}'}$</code>
             </p>
@@ -480,7 +490,7 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                 className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-700"
               >
                 {allClasses.map((c) => (
-                  <option key={c} value={c}>{c} клас</option>
+                  <option key={c} value={c}>{idToClassName(Number(c))} клас</option>
                 ))}
               </select>
               {copyError && <p className="mt-2 text-sm text-red-600">{copyError}</p>}

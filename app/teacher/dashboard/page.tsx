@@ -5,8 +5,33 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Card, PageContainer, Title } from '@/components/ui';
 
+const UA_LETTERS = 'абвгґдеєжзиіїйклмнопрстуфхцчшщьюя';
+
+function classNameToId(name: string): number | null {
+  const m = name.trim().toLowerCase().match(/^(\d{1,2})([а-яіїєґ]?)$/);
+  if (!m) return null;
+  const num = parseInt(m[1]);
+  if (num < 1 || num > 12) return null;
+  const letter = m[2];
+  if (!letter) return num;
+  const idx = UA_LETTERS.indexOf(letter);
+  if (idx < 0) return null;
+  return num * 100 + idx + 1;
+}
+
+function idToClassName(id: number): string {
+  if (id >= 1 && id <= 12) return String(id);
+  const num = Math.floor(id / 100);
+  const letterIdx = (id % 100) - 1;
+  if (letterIdx >= 0 && letterIdx < UA_LETTERS.length) {
+    return `${num}${UA_LETTERS[letterIdx]}`;
+  }
+  return String(id);
+}
+
 interface ClassStatus {
   classId: number;
+  className: string;
   active: boolean;
   loading: boolean;
   showKey: boolean;
@@ -18,7 +43,7 @@ export default function TeacherDashboardPage() {
   const [token, setToken] = useState('');
   const [teacherName, setTeacherName] = useState('');
   const [statuses, setStatuses] = useState<ClassStatus[]>([]);
-  const [newClassId, setNewClassId] = useState('');
+  const [newClassName, setNewClassName] = useState('');
   const [addError, setAddError] = useState('');
   const [addLoading, setAddLoading] = useState(false);
 
@@ -42,7 +67,7 @@ export default function TeacherDashboardPage() {
           headers: { 'x-teacher-token': t },
         });
         const d = await r.json();
-        return { classId, active: d.active ?? false, loading: false, showKey: false, sessionCode: d.session_code ?? null };
+        return { classId, className: idToClassName(classId), active: d.active ?? false, loading: false, showKey: false, sessionCode: d.session_code ?? null };
       })
     );
     setStatuses(results);
@@ -65,8 +90,8 @@ export default function TeacherDashboardPage() {
 
   async function addClass() {
     setAddError('');
-    const id = Number(newClassId);
-    if (!id || id < 1 || id > 12) { setAddError('Введіть номер від 1 до 12'); return; }
+    const id = classNameToId(newClassName);
+    if (!id) { setAddError('Введіть клас (напр. 8 або 8а)'); return; }
     if (statuses.some((s) => s.classId === id)) { setAddError('Цей клас вже є'); return; }
     setAddLoading(true);
     const res = await fetch('/api/classes', {
@@ -77,12 +102,13 @@ export default function TeacherDashboardPage() {
     const data = await res.json();
     setAddLoading(false);
     if (!data.ok) { setAddError(data.error ?? 'Помилка'); return; }
-    setNewClassId('');
-    setStatuses((prev) => [...prev, { classId: id, active: false, loading: false, showKey: false, sessionCode: null }].sort((a, b) => a.classId - b.classId));
+    setNewClassName('');
+    const className = idToClassName(id);
+    setStatuses((prev) => [...prev, { classId: id, className, active: false, loading: false, showKey: false, sessionCode: null }].sort((a, b) => a.classId - b.classId));
   }
 
-  async function deleteClass(classId: number) {
-    if (!confirm(`Видалити ${classId} клас?`)) return;
+  async function deleteClass(classId: number, className: string) {
+    if (!confirm(`Видалити ${className} клас?`)) return;
     await fetch('/api/classes', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json', 'x-teacher-token': token },
@@ -122,10 +148,11 @@ export default function TeacherDashboardPage() {
           <p className="mb-3 font-medium text-slate-700">Додати клас</p>
           <div className="flex gap-3 flex-wrap">
             <input
-              type="number" min={1} max={12} value={newClassId}
-              onChange={(e) => { setNewClassId(e.target.value); setAddError(''); }}
-              placeholder="Номер класу"
-              className="w-36 rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-700"
+              type="text" value={newClassName}
+              onChange={(e) => { setNewClassName(e.target.value); setAddError(''); }}
+              onKeyDown={(e) => e.key === 'Enter' && addClass()}
+              placeholder="напр. 8 або 8а"
+              className="w-40 rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-700"
             />
             <button
               onClick={addClass} disabled={addLoading}
@@ -139,10 +166,10 @@ export default function TeacherDashboardPage() {
 
         {/* Класи */}
         <div className="grid gap-4 md:grid-cols-3">
-          {statuses.map(({ classId, active, loading, showKey, sessionCode }) => (
+          {statuses.map(({ classId, className, active, loading, showKey, sessionCode }) => (
             <Card key={classId}>
               <div className="flex items-center justify-between">
-                <span className="text-2xl font-bold">{classId} клас</span>
+                <span className="text-2xl font-bold">{className} клас</span>
                 <span className={`rounded-full px-3 py-1 text-xs font-semibold ${active ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
                   {active ? 'Активно' : 'Вимкнено'}
                 </span>
@@ -170,7 +197,7 @@ export default function TeacherDashboardPage() {
                 <Link href={`/teacher/dashboard/${classId}/works`} className="w-full rounded-2xl border border-slate-300 py-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-50">
                   Керувати роботами
                 </Link>
-                <button onClick={() => deleteClass(classId)} className="w-full rounded-2xl border border-red-200 py-3 text-center text-sm font-medium text-red-500 hover:bg-red-50">
+                <button onClick={() => deleteClass(classId, className)} className="w-full rounded-2xl border border-red-200 py-3 text-center text-sm font-medium text-red-500 hover:bg-red-50">
                   Видалити клас
                 </button>
               </div>

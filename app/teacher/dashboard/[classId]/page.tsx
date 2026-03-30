@@ -47,6 +47,14 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
   const { classId } = use(params);
   const router = useRouter();
   const numericClassId = Number(classId);
+  const UA_LETTERS = 'абвгґдеєжзиіїйклмнопрстуфхцчшщьюя';
+  const displayClassName = numericClassId >= 1 && numericClassId <= 12
+    ? String(numericClassId)
+    : (() => {
+        const num = Math.floor(numericClassId / 100);
+        const li = (numericClassId % 100) - 1;
+        return li >= 0 && li < UA_LETTERS.length ? `${num}${UA_LETTERS[li]}` : String(numericClassId);
+      })();
 
   const [students, setStudents] = useState<StudentSession[]>([]);
   const [exitCountMap, setExitCountMap] = useState<Record<string, number>>({});
@@ -203,7 +211,7 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
 
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <Title>{numericClassId} клас</Title>
+            <Title>{displayClassName} клас</Title>
             <p className="mt-1 text-sm text-slate-500">Оновлюється кожні 5 сек</p>
           </div>
           <div className="flex gap-2">
