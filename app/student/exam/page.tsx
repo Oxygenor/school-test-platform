@@ -30,6 +30,8 @@ function ExamContent() {
   const [dbWork, setDbWork] = useState<{ work_type: string; title: string; duration_minutes: number; tasks: any[]; online_mode: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
   const [calcOpen, setCalcOpen] = useState(false);
+  const [draftOpen, setDraftOpen] = useState(false);
+  const [draftText, setDraftText] = useState('');
   const [unlockPassword, setUnlockPassword] = useState('');
   const [unlockError, setUnlockError] = useState('');
   const [secondsBlocked, setSecondsBlocked] = useState(0);
@@ -941,6 +943,39 @@ function ExamContent() {
         aria-label="Калькулятор"
       >
         🧮
+      </button>
+
+      {/* Чернетка */}
+      {draftOpen && (
+        <div className="fixed bottom-24 right-6 z-40 w-72 rounded-2xl bg-white shadow-2xl border border-slate-200 flex flex-col overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2 bg-slate-900">
+            <span className="text-sm font-semibold text-white">✏️ Чернетка</span>
+            <button onClick={() => setDraftOpen(false)} className="text-slate-400 hover:text-white text-xl leading-none">×</button>
+          </div>
+          <textarea
+            value={draftText}
+            onChange={(e) => setDraftText(e.target.value)}
+            placeholder="Тут можна записувати чорновики, розрахунки..."
+            className="flex-1 resize-none p-3 text-sm text-slate-800 outline-none"
+            style={{ minHeight: '220px' }}
+          />
+          <div className="px-3 py-2 border-t border-slate-100">
+            <button
+              onClick={() => setDraftText('')}
+              className="text-xs text-slate-400 hover:text-red-500"
+            >
+              Очистити
+            </button>
+          </div>
+        </div>
+      )}
+      <button
+        onClick={() => setDraftOpen(prev => !prev)}
+        className="fixed bottom-22 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-amber-500 text-white shadow-xl text-2xl"
+        aria-label="Чернетка"
+        style={{ bottom: '5.5rem' }}
+      >
+        ✏️
       </button>
 
       {/* Попередження: пропущені завдання */}
