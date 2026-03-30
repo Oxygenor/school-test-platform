@@ -18,7 +18,8 @@ type StoredTask = string
   | { type: 'header'; text: string }
   | { type: 'description'; text: string }
   | { type: 'fill_blank'; text: string; template: string; answers: string[]; points?: number; image_url?: string }
-  | { type: 'matching'; text: string; pairs: Array<{ left: string; right: string }>; points?: number; image_url?: string };
+  | { type: 'matching'; text: string; pairs: Array<{ left: string; right: string }>; points?: number; image_url?: string }
+  | { type: 'subtasks'; text: string; items: string[]; points?: number; image_url?: string };
 
 interface DbWork {
   id: string;
@@ -33,7 +34,7 @@ interface DbWork {
 }
 
 interface TaskForm {
-  type: 'task' | 'header' | 'description' | 'fill_blank' | 'matching';
+  type: 'task' | 'header' | 'description' | 'fill_blank' | 'matching' | 'subtasks';
   text: string;
   hasChoices: boolean;
   choices: string[];
@@ -43,6 +44,7 @@ interface TaskForm {
   fillTemplate: string;
   fillAnswers: string[];
   matchingPairs: Array<{ left: string; right: string }>;
+  subtaskItems: string[];
 }
 
 interface FormState {
@@ -58,13 +60,14 @@ interface FormState {
 const CHOICE_LABELS = ['А', 'Б', 'В', 'Г', 'Д'];
 
 function taskToForm(t: StoredTask): TaskForm {
-  const base = { hasChoices: false, choices: ['', '', '', ''], correctChoice: null as null, points: 1, image_url: null as null, fillTemplate: '', fillAnswers: [] as string[], matchingPairs: [] as Array<{ left: string; right: string }> };
+  const base = { hasChoices: false, choices: ['', '', '', ''], correctChoice: null as null, points: 1, image_url: null as null, fillTemplate: '', fillAnswers: [] as string[], matchingPairs: [] as Array<{ left: string; right: string }>, subtaskItems: [] as string[] };
   if (typeof t === 'string') return { ...base, type: 'task', text: t };
   const a = t as any;
   if (a.type === 'header') return { ...base, type: 'header', text: a.text };
   if (a.type === 'description') return { ...base, type: 'description', text: a.text };
   if (a.type === 'fill_blank') return { ...base, type: 'fill_blank', text: a.text || '', points: a.points ?? 1, image_url: a.image_url ?? null, fillTemplate: a.template ?? '', fillAnswers: a.answers ?? [] };
   if (a.type === 'matching') return { ...base, type: 'matching', text: a.text || '', points: a.points ?? 1, image_url: a.image_url ?? null, matchingPairs: a.pairs ?? [] };
+  if (a.type === 'subtasks') return { ...base, type: 'subtasks', text: a.text || '', points: a.points ?? 1, image_url: a.image_url ?? null, subtaskItems: a.items ?? ['', ''] };
   const choices = [...(a.choices || [])];
   while (choices.length < 4) choices.push('');
   return { ...base, type: 'task', text: a.text, hasChoices: (a.choices?.length ?? 0) > 0, choices, correctChoice: a.correctChoice ?? null, points: a.points ?? 1, image_url: a.image_url ?? null };
@@ -73,6 +76,11 @@ function taskToForm(t: StoredTask): TaskForm {
 function formToTask(t: TaskForm): StoredTask {
   if (t.type === 'header') return { type: 'header', text: t.text } as any;
   if (t.type === 'description') return { type: 'description', text: t.text } as any;
+  if (t.type === 'subtasks') {
+    const obj: any = { type: 'subtasks', text: t.text, items: t.subtaskItems.filter(s => s.trim()), points: t.points };
+    if (t.image_url) obj.image_url = t.image_url;
+    return obj;
+  }
   if (t.type === 'fill_blank') {
     const obj: any = { type: 'fill_blank', text: t.text, template: t.fillTemplate, answers: t.fillAnswers.slice(0, (t.fillTemplate.match(/\[___\]/g) || []).length), points: t.points };
     if (t.image_url) obj.image_url = t.image_url;
@@ -97,13 +105,15 @@ function parseTask(t: StoredTask): { text: string; choices: string[]; type?: str
   return { text: a.text, choices: a.choices || [], type: a.type };
 }
 
+const EMPTY_TASK = (): TaskForm => ({ type: 'task', text: '', hasChoices: false, choices: ['', '', '', ''], correctChoice: null, points: 1, image_url: null, fillTemplate: '', fillAnswers: [], matchingPairs: [], subtaskItems: [] });
+
 const emptyForm = (): FormState => ({
   subject: '',
   variant: 1,
   workType: 'Самостійна робота',
   title: '',
   durationMinutes: 40,
-  tasks: [{ type: 'task' as const, text: '', hasChoices: false, choices: ['', '', '', ''], correctChoice: null, points: 1, image_url: null, fillTemplate: '', fillAnswers: [], matchingPairs: [] }],
+  tasks: [EMPTY_TASK()],
   onlineMode: false,
 });
 
@@ -183,7 +193,7 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
       workType: work.work_type,
       title: work.title,
       durationMinutes: work.duration_minutes,
-      tasks: work.tasks.length > 0 ? work.tasks.map(taskToForm) : [{ type: 'task' as const, text: '', hasChoices: false, choices: ['', '', '', ''], correctChoice: null, points: 1, image_url: null, fillTemplate: '', fillAnswers: [], matchingPairs: [] }],
+      tasks: work.tasks.length > 0 ? work.tasks.map(taskToForm) : [EMPTY_TASK()],
       onlineMode: work.online_mode ?? false,
     });
     setEditingWork(work);
@@ -628,10 +638,10 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                         if (!isHeader && !isDesc) taskNum++;
                         const num = taskNum;
                         return (
-                      <div key={i} className={`rounded-xl border p-3 space-y-2 ${isHeader ? 'border-blue-200 bg-blue-50' : isDesc ? 'border-amber-200 bg-amber-50' : task.type === 'fill_blank' ? 'border-green-200 bg-green-50' : task.type === 'matching' ? 'border-purple-200 bg-purple-50' : 'border-slate-200'}`}>
+                      <div key={i} className={`rounded-xl border p-3 space-y-2 ${isHeader ? 'border-blue-200 bg-blue-50' : isDesc ? 'border-amber-200 bg-amber-50' : task.type === 'fill_blank' ? 'border-green-200 bg-green-50' : task.type === 'matching' ? 'border-purple-200 bg-purple-50' : task.type === 'subtasks' ? 'border-orange-200 bg-orange-50' : 'border-slate-200'}`}>
                         <div className="flex gap-2 items-start">
-                          <span className={`mt-2 text-xs font-bold px-1.5 py-0.5 rounded shrink-0 ${isHeader ? 'bg-blue-200 text-blue-700' : isDesc ? 'bg-amber-200 text-amber-700' : task.type === 'fill_blank' ? 'bg-green-200 text-green-700' : task.type === 'matching' ? 'bg-purple-200 text-purple-700' : 'text-slate-400'}`}>
-                            {isHeader ? 'Заг.' : isDesc ? 'Опис' : task.type === 'fill_blank' ? 'Проп.' : task.type === 'matching' ? 'Відп.' : `${num}.`}
+                          <span className={`mt-2 text-xs font-bold px-1.5 py-0.5 rounded shrink-0 ${isHeader ? 'bg-blue-200 text-blue-700' : isDesc ? 'bg-amber-200 text-amber-700' : task.type === 'fill_blank' ? 'bg-green-200 text-green-700' : task.type === 'matching' ? 'bg-purple-200 text-purple-700' : task.type === 'subtasks' ? 'bg-orange-200 text-orange-700' : 'text-slate-400'}`}>
+                            {isHeader ? 'Заг.' : isDesc ? 'Опис' : task.type === 'fill_blank' ? 'Проп.' : task.type === 'matching' ? 'Відп.' : task.type === 'subtasks' ? `${num}.` : `${num}.`}
                           </span>
                           <div className="flex-1 space-y-1">
                             <div className="flex flex-wrap gap-1">
@@ -652,8 +662,8 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                               value={task.text}
                               onChange={(e) => updateTaskText(i, e.target.value)}
                               rows={isHeader ? 1 : 2}
-                              placeholder={isHeader ? 'Текст заголовку...' : isDesc ? 'Текст інструкції/опису...' : 'Текст завдання...'}
-                              className={`w-full rounded-xl border px-3 py-2 text-sm outline-none resize-none ${isHeader ? 'border-blue-300 focus:border-blue-500 font-bold' : isDesc ? 'border-amber-300 focus:border-amber-500 italic' : 'border-slate-300 focus:border-slate-700'}`}
+                              placeholder={isHeader ? 'Текст заголовку...' : isDesc ? 'Текст інструкції/опису...' : task.type === 'subtasks' ? 'Загальний текст завдання (необов\'язково)...' : 'Текст завдання...'}
+                              className={`w-full rounded-xl border px-3 py-2 text-sm outline-none resize-none ${isHeader ? 'border-blue-300 focus:border-blue-500 font-bold' : isDesc ? 'border-amber-300 focus:border-amber-500 italic' : task.type === 'subtasks' ? 'border-orange-300 focus:border-orange-500' : 'border-slate-300 focus:border-slate-700'}`}
                             />
                           </div>
                           {!isHeader && !isDesc && (
@@ -852,6 +862,39 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                           </div>
                         )}
 
+                        {/* Підзавдання а)б)в) */}
+                        {task.type === 'subtasks' && (
+                          <div className="ml-7 space-y-2">
+                            <label className="text-xs font-medium text-slate-600">Пункти завдання:</label>
+                            {task.subtaskItems.map((item, si) => (
+                              <div key={si} className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-orange-600 shrink-0 w-5">{String.fromCharCode(0x430 + si)})</span>
+                                <input
+                                  type="text"
+                                  value={item}
+                                  onChange={e => setForm(p => { const tasks = [...p.tasks]; const items = [...tasks[i].subtaskItems]; items[si] = e.target.value; tasks[i] = { ...tasks[i], subtaskItems: items }; return { ...p, tasks }; })}
+                                  placeholder={`Пункт ${String.fromCharCode(0x430 + si)}...`}
+                                  className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm outline-none focus:border-orange-400"
+                                />
+                                {task.subtaskItems.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setForm(p => { const tasks = [...p.tasks]; tasks[i] = { ...tasks[i], subtaskItems: tasks[i].subtaskItems.filter((_, idx) => idx !== si) }; return { ...p, tasks }; })}
+                                    className="text-red-400 hover:text-red-600"
+                                  >×</button>
+                                )}
+                              </div>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => setForm(p => { const tasks = [...p.tasks]; tasks[i] = { ...tasks[i], subtaskItems: [...tasks[i].subtaskItems, ''] }; return { ...p, tasks }; })}
+                              className="text-xs text-slate-400 hover:text-slate-600 underline"
+                            >
+                              + Додати пункт
+                            </button>
+                          </div>
+                        )}
+
                         {/* Відповідність */}
                         {task.type === 'matching' && (
                           <div className="ml-7 space-y-2">
@@ -898,31 +941,37 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                   </div>
                   <div className="mt-3 flex gap-2 flex-wrap">
                     <button
-                      onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, { type: 'task' as const, text: '', hasChoices: false, choices: ['', '', '', ''], correctChoice: null, points: 1, image_url: null, fillTemplate: '', fillAnswers: [], matchingPairs: [] }] }))}
+                      onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, EMPTY_TASK()] }))}
                       className="flex-1 rounded-xl border border-dashed border-slate-300 px-4 py-2 text-sm text-slate-500 hover:border-slate-500 hover:text-slate-700"
                     >
                       + Завдання
                     </button>
                     <button
-                      onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, { type: 'header' as const, text: '', hasChoices: false, choices: [], correctChoice: null, points: 1, image_url: null, fillTemplate: '', fillAnswers: [], matchingPairs: [] }] }))}
+                      onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, { type: 'subtasks' as const, text: '', hasChoices: false, choices: [], correctChoice: null, points: 1, image_url: null, fillTemplate: '', fillAnswers: [], matchingPairs: [], subtaskItems: ['', ''] }] }))}
+                      className="rounded-xl border border-dashed border-orange-300 px-4 py-2 text-sm text-orange-600 hover:border-orange-500 hover:text-orange-700"
+                    >
+                      + Підзавдання а)б)в)
+                    </button>
+                    <button
+                      onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, { type: 'header' as const, text: '', hasChoices: false, choices: [], correctChoice: null, points: 1, image_url: null, fillTemplate: '', fillAnswers: [], matchingPairs: [], subtaskItems: [] }] }))}
                       className="rounded-xl border border-dashed border-blue-300 px-4 py-2 text-sm text-blue-500 hover:border-blue-500 hover:text-blue-700"
                     >
                       + Заголовок
                     </button>
                     <button
-                      onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, { type: 'description' as const, text: '', hasChoices: false, choices: [], correctChoice: null, points: 1, image_url: null, fillTemplate: '', fillAnswers: [], matchingPairs: [] }] }))}
+                      onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, { type: 'description' as const, text: '', hasChoices: false, choices: [], correctChoice: null, points: 1, image_url: null, fillTemplate: '', fillAnswers: [], matchingPairs: [], subtaskItems: [] }] }))}
                       className="rounded-xl border border-dashed border-amber-300 px-4 py-2 text-sm text-amber-600 hover:border-amber-500 hover:text-amber-700"
                     >
                       + Опис/Інструкція
                     </button>
                     <button
-                      onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, { type: 'fill_blank' as const, text: '', hasChoices: false, choices: [], correctChoice: null, points: 1, image_url: null, fillTemplate: '', fillAnswers: [], matchingPairs: [] }] }))}
+                      onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, { type: 'fill_blank' as const, text: '', hasChoices: false, choices: [], correctChoice: null, points: 1, image_url: null, fillTemplate: '', fillAnswers: [], matchingPairs: [], subtaskItems: [] }] }))}
                       className="rounded-xl border border-dashed border-green-300 px-4 py-2 text-sm text-green-600 hover:border-green-500 hover:text-green-700"
                     >
                       + Заповни пропуск
                     </button>
                     <button
-                      onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, { type: 'matching' as const, text: '', hasChoices: false, choices: [], correctChoice: null, points: 1, image_url: null, fillTemplate: '', fillAnswers: [], matchingPairs: [{ left: '', right: '' }, { left: '', right: '' }] }] }))}
+                      onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, { type: 'matching' as const, text: '', hasChoices: false, choices: [], correctChoice: null, points: 1, image_url: null, fillTemplate: '', fillAnswers: [], matchingPairs: [{ left: '', right: '' }, { left: '', right: '' }], subtaskItems: [] }] }))}
                       className="rounded-xl border border-dashed border-purple-300 px-4 py-2 text-sm text-purple-600 hover:border-purple-500 hover:text-purple-700"
                     >
                       + Відповідність

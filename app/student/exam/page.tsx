@@ -492,6 +492,7 @@ function ExamContent() {
     work.tasks.forEach((task: any, i: number) => {
       const taskType = typeof task === 'string' ? 'task' : (task.type ?? 'task');
       if (taskType === 'header' || taskType === 'description') return;
+      if (taskType === 'subtasks') { taskNum++; return; }
       taskNum++;
       if (taskType === 'fill_blank') {
         const blankCount = ((task.template as string || '').match(/\[___\]/g) || []).length;
@@ -767,6 +768,41 @@ function ExamContent() {
                           Відповідь записуйте на паперовому аркуші.
                         </div>
                       )}
+                    </div>
+                  </div>
+                );
+              }
+
+              if (taskType === 'subtasks') {
+                taskNum++;
+                const items: string[] = task.items || [];
+                return (
+                  <div key={index} className={`rounded-2xl border p-4 shadow-sm md:rounded-3xl md:p-6 transition-colors ${dark ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'}`}>
+                    <div className="space-y-3 md:space-y-4">
+                      <div className={`flex h-10 w-10 items-center justify-center rounded-xl text-base font-bold text-white md:h-12 md:w-12 md:rounded-2xl md:text-lg ${dark ? 'bg-slate-600' : 'bg-slate-900'}`}>
+                        {taskNum}
+                      </div>
+                      <div className={`w-full rounded-xl px-4 py-3 md:rounded-2xl md:px-5 md:py-4 ${dark ? 'bg-slate-700 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
+                        {taskText && (
+                          <div className={`font-serif mb-3 ${fontSizeClass}`}>
+                            <MathText text={taskText} />
+                          </div>
+                        )}
+                        {task.image_url && (
+                          <img src={task.image_url} alt="" className="mb-3 max-h-64 w-auto rounded-xl object-contain" draggable={false} />
+                        )}
+                        <div className="space-y-2">
+                          {items.map((item: string, ii: number) => (
+                            <div key={ii} className={`flex items-start gap-2 text-sm font-serif ${fontSizeClass}`}>
+                              <span className={`font-bold shrink-0 ${dark ? 'text-orange-400' : 'text-orange-600'}`}>{String.fromCharCode(0x430 + ii)})</span>
+                              <MathText text={item} />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div className={`mt-3 rounded-xl border border-dashed p-3 text-xs md:rounded-2xl md:p-4 md:text-sm ${dark ? 'border-slate-600 bg-slate-800 text-slate-500' : 'border-slate-300 bg-white text-slate-500'}`}>
+                        Відповідь записуйте на паперовому аркуші.
+                      </div>
                     </div>
                   </div>
                 );
