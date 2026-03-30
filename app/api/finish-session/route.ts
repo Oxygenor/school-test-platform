@@ -46,6 +46,24 @@ export async function POST(req: Request) {
           earnedPoints += earned;
           return { taskIndex: i, answer: studentAnswers, correctAnswer: correctAnswers, isCorrect: earned === pts * correctAnswers.length, points: pts * correctAnswers.length, earnedPoints: earned };
         }
+        if (task.type === 'subtasks') {
+          const pts = task.points ?? 1;
+          const items: any[] = task.items || [];
+          const scorableItems = items.filter((it: any) => typeof it === 'object' && it.correctChoice !== undefined && it.correctChoice !== null && (it.choices?.length ?? 0) > 0);
+          if (scorableItems.length === 0) return { taskIndex: i, answer: null, correctAnswer: null, isCorrect: null, points: null };
+          maxPoints += pts * scorableItems.length;
+          let studentMapping: Record<string, string> = {};
+          try { studentMapping = JSON.parse(answers[i] ?? '{}'); } catch {}
+          let earned = 0;
+          items.forEach((it: any, ii: number) => {
+            if (typeof it !== 'object' || it.correctChoice === undefined || it.correctChoice === null) return;
+            const correctLabel = CHOICE_LABELS[it.correctChoice];
+            if (studentMapping[String(ii)] === correctLabel) earned += pts;
+          });
+          earnedPoints += earned;
+          const correctAnswer = Object.fromEntries(items.map((it: any, ii: number) => [String(ii), typeof it === 'object' && it.correctChoice != null ? CHOICE_LABELS[it.correctChoice] : null]).filter(([, v]) => v));
+          return { taskIndex: i, answer: studentMapping, correctAnswer, isCorrect: earned === pts * scorableItems.length, points: pts * scorableItems.length, earnedPoints: earned };
+        }
         if (task.type === 'matching') {
           const pts = task.points ?? 1;
           const pairCount = (task.pairs || []).length;

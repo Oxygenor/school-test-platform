@@ -492,7 +492,16 @@ function ExamContent() {
     work.tasks.forEach((task: any, i: number) => {
       const taskType = typeof task === 'string' ? 'task' : (task.type ?? 'task');
       if (taskType === 'header' || taskType === 'description') return;
-      if (taskType === 'subtasks') { taskNum++; return; }
+      if (taskType === 'subtasks') {
+        taskNum++;
+        const items: any[] = task.items || [];
+        const scorableCount = items.filter((it: any) => typeof it === 'object' && (it.choices?.length ?? 0) > 0).length;
+        if (scorableCount > 0) {
+          const m: Record<string, string> = (() => { try { return JSON.parse(answers[i] ?? '{}'); } catch { return {}; } })();
+          if (Object.keys(m).length < scorableCount) skipped.push(taskNum);
+        }
+        return;
+      }
       taskNum++;
       if (taskType === 'fill_blank') {
         const blankCount = ((task.template as string || '').match(/\[___\]/g) || []).length;
@@ -775,7 +784,10 @@ function ExamContent() {
 
               if (taskType === 'subtasks') {
                 taskNum++;
-                const items: string[] = task.items || [];
+                const items: any[] = task.items || [];
+                const hasAnyChoices = items.some((it: any) => typeof it === 'object' && (it.choices?.length ?? 0) > 0);
+                const isOnline = dbWork?.online_mode;
+                const currentSubAnswers: Record<string, string> = (() => { try { return JSON.parse(answers[index] ?? '{}'); } catch { return {}; } })();
                 return (
                   <div key={index} className={`rounded-2xl border p-4 shadow-sm md:rounded-3xl md:p-6 transition-colors ${dark ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'}`}>
                     <div className="space-y-3 md:space-y-4">
@@ -791,18 +803,55 @@ function ExamContent() {
                         {task.image_url && (
                           <img src={task.image_url} alt="" className="mb-3 max-h-64 w-auto rounded-xl object-contain" draggable={false} />
                         )}
-                        <div className="space-y-2">
-                          {items.map((item: string, ii: number) => (
-                            <div key={ii} className={`flex items-start gap-2 text-sm font-serif ${fontSizeClass}`}>
-                              <span className={`font-bold shrink-0 ${dark ? 'text-orange-400' : 'text-orange-600'}`}>{String.fromCharCode(0x430 + ii)})</span>
-                              <MathText text={item} />
-                            </div>
-                          ))}
+                        <div className="space-y-3">
+                          {items.map((item: any, ii: number) => {
+                            const itemText = typeof item === 'string' ? item : item.text;
+                            const choices: string[] = typeof item === 'object' ? (item.choices || []) : [];
+                            const selectedLabel = currentSubAnswers[String(ii)];
+                            return (
+                              <div key={ii}>
+                                <div className={`flex items-start gap-2 font-serif ${fontSizeClass}`}>
+                                  <span className={`font-bold shrink-0 ${dark ? 'text-orange-400' : 'text-orange-600'}`}>{String.fromCharCode(0x430 + ii)})</span>
+                                  <MathText text={itemText} />
+                                </div>
+                                {choices.length > 0 && (
+                                  <div className="mt-1.5 ml-5 grid grid-cols-2 gap-2 md:grid-cols-4">
+                                    {choices.map((c: string, ci: number) => {
+                                      const label = CHOICE_LABELS[ci] ?? String.fromCharCode(65 + ci);
+                                      const isSelected = selectedLabel === label;
+                                      return (
+                                        <div
+                                          key={ci}
+                                          onClick={() => isOnline ? setAnswers(prev => {
+                                            const m: Record<string, string> = (() => { try { return JSON.parse(prev[index] ?? '{}'); } catch { return {}; } })();
+                                            const updated = { ...m };
+                                            if (isSelected) delete updated[String(ii)]; else updated[String(ii)] = label;
+                                            return { ...prev, [index]: JSON.stringify(updated) };
+                                          }) : undefined}
+                                          className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${isOnline ? 'cursor-pointer' : ''} ${
+                                            isSelected
+                                              ? 'border-blue-500 bg-blue-500 text-white'
+                                              : dark
+                                                ? 'border-slate-500 bg-slate-600 text-slate-200 hover:bg-slate-500'
+                                                : 'border-slate-300 bg-white text-slate-800 hover:bg-slate-100'
+                                          }`}
+                                        >
+                                          <span className="font-bold mr-1">{label})</span>{c}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
-                      <div className={`mt-3 rounded-xl border border-dashed p-3 text-xs md:rounded-2xl md:p-4 md:text-sm ${dark ? 'border-slate-600 bg-slate-800 text-slate-500' : 'border-slate-300 bg-white text-slate-500'}`}>
-                        Відповідь записуйте на паперовому аркуші.
-                      </div>
+                      {(!isOnline || !hasAnyChoices) && (
+                        <div className={`rounded-xl border border-dashed p-3 text-xs md:rounded-2xl md:p-4 md:text-sm ${dark ? 'border-slate-600 bg-slate-800 text-slate-500' : 'border-slate-300 bg-white text-slate-500'}`}>
+                          Відповідь записуйте на паперовому аркуші.
+                        </div>
+                      )}
                     </div>
                   </div>
                 );

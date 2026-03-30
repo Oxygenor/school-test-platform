@@ -154,7 +154,7 @@ function PrintWorkContent() {
 
             if (taskType === 'subtasks') {
               taskNum++;
-              const items: string[] = task.items || [];
+              const items: any[] = task.items || [];
               return (
                 <div key={i} className="break-inside-avoid">
                   <div className="flex items-start gap-3">
@@ -162,16 +162,32 @@ function PrintWorkContent() {
                     <div className="flex-1">
                       {task.text && <div className="mb-2 leading-relaxed"><MathText text={task.text} /></div>}
                       {task.image_url && <img src={task.image_url} alt="" className="mb-2 max-h-40 object-contain" />}
-                      <div className="space-y-1 ml-2">
-                        {items.map((item: string, ii: number) => (
-                          <div key={ii} className="flex items-start gap-2 text-sm">
-                            <span className="font-bold text-slate-600 shrink-0">{String.fromCharCode(0x430 + ii)})</span>
-                            <div className="flex-1">
-                              <MathText text={item} />
-                              {!item.trim() && <span className="inline-block w-40 border-b border-dashed border-slate-400 ml-1 align-bottom" />}
+                      <div className="space-y-2 ml-2">
+                        {items.map((item: any, ii: number) => {
+                          const itemText = typeof item === 'string' ? item : item.text;
+                          const choices: string[] = typeof item === 'object' ? (item.choices || []) : [];
+                          return (
+                            <div key={ii}>
+                              <div className="flex items-start gap-2 text-sm">
+                                <span className="font-bold text-slate-600 shrink-0">{String.fromCharCode(0x430 + ii)})</span>
+                                <div className="flex-1">
+                                  <MathText text={itemText} />
+                                  {choices.length === 0 && <span className="inline-block w-40 border-b border-dashed border-slate-400 ml-1 align-bottom" />}
+                                </div>
+                              </div>
+                              {choices.length > 0 && (
+                                <div className="mt-1 ml-5 grid grid-cols-2 gap-x-6 gap-y-0.5">
+                                  {choices.map((c: string, ci: number) => (
+                                    <div key={ci} className="flex items-center gap-2 text-sm">
+                                      <span className="font-bold">{CHOICE_LABELS[ci] ?? String.fromCharCode(65 + ci)})</span>
+                                      <MathText text={c} />
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                     <div className="shrink-0 text-xs text-slate-400 no-print">{task.points ?? 1} б</div>

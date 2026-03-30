@@ -19,7 +19,7 @@ type StoredTask = string
   | { type: 'description'; text: string }
   | { type: 'fill_blank'; text: string; template: string; answers: string[]; points?: number; image_url?: string }
   | { type: 'matching'; text: string; pairs: Array<{ left: string; right: string }>; points?: number; image_url?: string }
-  | { type: 'subtasks'; text: string; items: string[]; points?: number; image_url?: string };
+  | { type: 'subtasks'; text: string; items: Array<{ text: string; choices?: string[]; correctChoice?: number }>; points?: number; image_url?: string };
 
 interface DbWork {
   id: string;
@@ -33,6 +33,13 @@ interface DbWork {
   online_mode: boolean;
 }
 
+interface SubtaskItemForm {
+  text: string;
+  hasChoices: boolean;
+  choices: string[];
+  correctChoice: number | null;
+}
+
 interface TaskForm {
   type: 'task' | 'header' | 'description' | 'fill_blank' | 'matching' | 'subtasks';
   text: string;
@@ -44,7 +51,7 @@ interface TaskForm {
   fillTemplate: string;
   fillAnswers: string[];
   matchingPairs: Array<{ left: string; right: string }>;
-  subtaskItems: string[];
+  subtaskItems: SubtaskItemForm[];
 }
 
 interface FormState {
@@ -59,15 +66,28 @@ interface FormState {
 
 const CHOICE_LABELS = ['А', 'Б', 'В', 'Г', 'Д'];
 
+const emptySubtaskItem = (): SubtaskItemForm => ({ text: '', hasChoices: false, choices: ['', '', '', ''], correctChoice: null });
+
+function subtaskItemToForm(raw: any): SubtaskItemForm {
+  if (typeof raw === 'string') return { text: raw, hasChoices: false, choices: ['', '', '', ''], correctChoice: null };
+  const choices = [...(raw.choices || [])];
+  while (choices.length < 4) choices.push('');
+  return { text: raw.text || '', hasChoices: (raw.choices?.length ?? 0) > 0, choices, correctChoice: raw.correctChoice ?? null };
+}
+
 function taskToForm(t: StoredTask): TaskForm {
-  const base = { hasChoices: false, choices: ['', '', '', ''], correctChoice: null as null, points: 1, image_url: null as null, fillTemplate: '', fillAnswers: [] as string[], matchingPairs: [] as Array<{ left: string; right: string }>, subtaskItems: [] as string[] };
+  const base = { hasChoices: false, choices: ['', '', '', ''], correctChoice: null as null, points: 1, image_url: null as null, fillTemplate: '', fillAnswers: [] as string[], matchingPairs: [] as Array<{ left: string; right: string }>, subtaskItems: [] as SubtaskItemForm[] };
   if (typeof t === 'string') return { ...base, type: 'task', text: t };
   const a = t as any;
   if (a.type === 'header') return { ...base, type: 'header', text: a.text };
   if (a.type === 'description') return { ...base, type: 'description', text: a.text };
   if (a.type === 'fill_blank') return { ...base, type: 'fill_blank', text: a.text || '', points: a.points ?? 1, image_url: a.image_url ?? null, fillTemplate: a.template ?? '', fillAnswers: a.answers ?? [] };
   if (a.type === 'matching') return { ...base, type: 'matching', text: a.text || '', points: a.points ?? 1, image_url: a.image_url ?? null, matchingPairs: a.pairs ?? [] };
-  if (a.type === 'subtasks') return { ...base, type: 'subtasks', text: a.text || '', points: a.points ?? 1, image_url: a.image_url ?? null, subtaskItems: a.items ?? ['', ''] };
+  if (a.type === 'subtasks') {
+    const rawItems: any[] = a.items ?? [];
+    const items = rawItems.length > 0 ? rawItems.map(subtaskItemToForm) : [emptySubtaskItem(), emptySubtaskItem()];
+    return { ...base, type: 'subtasks', text: a.text || '', points: a.points ?? 1, image_url: a.image_url ?? null, subtaskItems: items };
+  }
   const choices = [...(a.choices || [])];
   while (choices.length < 4) choices.push('');
   return { ...base, type: 'task', text: a.text, hasChoices: (a.choices?.length ?? 0) > 0, choices, correctChoice: a.correctChoice ?? null, points: a.points ?? 1, image_url: a.image_url ?? null };
@@ -77,7 +97,16 @@ function formToTask(t: TaskForm): StoredTask {
   if (t.type === 'header') return { type: 'header', text: t.text } as any;
   if (t.type === 'description') return { type: 'description', text: t.text } as any;
   if (t.type === 'subtasks') {
-    const obj: any = { type: 'subtasks', text: t.text, items: t.subtaskItems.filter(s => s.trim()), points: t.points };
+    const items = t.subtaskItems
+      .filter(s => s.text.trim())
+      .map(s => {
+        const filtered = s.choices.filter(c => c.trim());
+        if (!s.hasChoices || filtered.length === 0) return { text: s.text };
+        const item: any = { text: s.text, choices: filtered };
+        if (s.correctChoice !== null) item.correctChoice = s.correctChoice;
+        return item;
+      });
+    const obj: any = { type: 'subtasks', text: t.text, items, points: t.points };
     if (t.image_url) obj.image_url = t.image_url;
     return obj;
   }
@@ -105,7 +134,7 @@ function parseTask(t: StoredTask): { text: string; choices: string[]; type?: str
   return { text: a.text, choices: a.choices || [], type: a.type };
 }
 
-const EMPTY_TASK = (): TaskForm => ({ type: 'task', text: '', hasChoices: false, choices: ['', '', '', ''], correctChoice: null, points: 1, image_url: null, fillTemplate: '', fillAnswers: [], matchingPairs: [], subtaskItems: [] });
+const EMPTY_TASK = (): TaskForm => ({ type: 'task', text: '', hasChoices: false, choices: ['', '', '', ''], correctChoice: null, points: 1, image_url: null, fillTemplate: '', fillAnswers: [], matchingPairs: [], subtaskItems: [] as SubtaskItemForm[] });
 
 const emptyForm = (): FormState => ({
   subject: '',
@@ -864,30 +893,88 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
 
                         {/* Підзавдання а)б)в) */}
                         {task.type === 'subtasks' && (
-                          <div className="ml-7 space-y-2">
+                          <div className="ml-7 space-y-3">
                             <label className="text-xs font-medium text-slate-600">Пункти завдання:</label>
                             {task.subtaskItems.map((item, si) => (
-                              <div key={si} className="flex items-center gap-2">
-                                <span className="text-xs font-bold text-orange-600 shrink-0 w-5">{String.fromCharCode(0x430 + si)})</span>
-                                <input
-                                  type="text"
-                                  value={item}
-                                  onChange={e => setForm(p => { const tasks = [...p.tasks]; const items = [...tasks[i].subtaskItems]; items[si] = e.target.value; tasks[i] = { ...tasks[i], subtaskItems: items }; return { ...p, tasks }; })}
-                                  placeholder={`Пункт ${String.fromCharCode(0x430 + si)}...`}
-                                  className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm outline-none focus:border-orange-400"
-                                />
-                                {task.subtaskItems.length > 1 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => setForm(p => { const tasks = [...p.tasks]; tasks[i] = { ...tasks[i], subtaskItems: tasks[i].subtaskItems.filter((_, idx) => idx !== si) }; return { ...p, tasks }; })}
-                                    className="text-red-400 hover:text-red-600"
-                                  >×</button>
+                              <div key={si} className="rounded-lg border border-orange-200 bg-white p-2 space-y-1.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-bold text-orange-600 shrink-0 w-5">{String.fromCharCode(0x430 + si)})</span>
+                                  <input
+                                    type="text"
+                                    value={item.text}
+                                    onChange={e => setForm(p => { const tasks = [...p.tasks]; const items = [...tasks[i].subtaskItems]; items[si] = { ...items[si], text: e.target.value }; tasks[i] = { ...tasks[i], subtaskItems: items }; return { ...p, tasks }; })}
+                                    placeholder={`Текст пункту ${String.fromCharCode(0x430 + si)}...`}
+                                    className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm outline-none focus:border-orange-400"
+                                  />
+                                  {task.subtaskItems.length > 1 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setForm(p => { const tasks = [...p.tasks]; tasks[i] = { ...tasks[i], subtaskItems: tasks[i].subtaskItems.filter((_, idx) => idx !== si) }; return { ...p, tasks }; })}
+                                      className="text-red-400 hover:text-red-600 shrink-0"
+                                    >×</button>
+                                  )}
+                                </div>
+                                <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-600 ml-6">
+                                  <input
+                                    type="checkbox"
+                                    checked={item.hasChoices}
+                                    onChange={() => setForm(p => { const tasks = [...p.tasks]; const items = [...tasks[i].subtaskItems]; items[si] = { ...items[si], hasChoices: !items[si].hasChoices }; tasks[i] = { ...tasks[i], subtaskItems: items }; return { ...p, tasks }; })}
+                                    className="rounded"
+                                  />
+                                  Варіанти відповідей
+                                </label>
+                                {item.hasChoices && (
+                                  <div className="ml-6 space-y-1.5">
+                                    {item.choices.map((choice, ci) => (
+                                      <div key={ci} className="flex items-center gap-2">
+                                        <span className="text-xs font-bold text-slate-500 w-6">{CHOICE_LABELS[ci] ?? String.fromCharCode(65 + ci)})</span>
+                                        <input
+                                          type="text"
+                                          value={choice}
+                                          onChange={e => setForm(p => { const tasks = [...p.tasks]; const items = [...tasks[i].subtaskItems]; const choices = [...items[si].choices]; choices[ci] = e.target.value; items[si] = { ...items[si], choices }; tasks[i] = { ...tasks[i], subtaskItems: items }; return { ...p, tasks }; })}
+                                          placeholder={`Варіант ${ci + 1}...`}
+                                          className="flex-1 rounded-lg border border-slate-300 px-3 py-1 text-xs outline-none focus:border-orange-400"
+                                        />
+                                        {item.choices.length > 2 && (
+                                          <button
+                                            type="button"
+                                            onClick={() => setForm(p => { const tasks = [...p.tasks]; const items = [...tasks[i].subtaskItems]; items[si] = { ...items[si], choices: items[si].choices.filter((_, idx) => idx !== ci) }; tasks[i] = { ...tasks[i], subtaskItems: items }; return { ...p, tasks }; })}
+                                            className="text-red-400 hover:text-red-600 text-sm"
+                                          >×</button>
+                                        )}
+                                      </div>
+                                    ))}
+                                    {item.choices.length < 6 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setForm(p => { const tasks = [...p.tasks]; const items = [...tasks[i].subtaskItems]; items[si] = { ...items[si], choices: [...items[si].choices, ''] }; tasks[i] = { ...tasks[i], subtaskItems: items }; return { ...p, tasks }; })}
+                                        className="text-xs text-slate-400 hover:text-slate-600 underline"
+                                      >+ Додати варіант</button>
+                                    )}
+                                    {form.onlineMode && item.choices.filter(c => c.trim()).length > 0 && (
+                                      <div className="pt-1 border-t border-slate-200">
+                                        <p className="text-xs font-medium text-slate-600 mb-1">Правильна відповідь:</p>
+                                        <div className="flex flex-wrap gap-2">
+                                          {item.choices.map((c, ci) => c.trim() ? (
+                                            <button
+                                              key={ci}
+                                              type="button"
+                                              onClick={() => setForm(p => { const tasks = [...p.tasks]; const items = [...tasks[i].subtaskItems]; items[si] = { ...items[si], correctChoice: items[si].correctChoice === ci ? null : ci }; tasks[i] = { ...tasks[i], subtaskItems: items }; return { ...p, tasks }; })}
+                                              className={`rounded-lg px-2 py-0.5 text-xs font-bold transition ${item.correctChoice === ci ? 'bg-green-500 text-white' : 'border border-slate-300 text-slate-600 hover:bg-slate-100'}`}
+                                            >
+                                              {CHOICE_LABELS[ci]}) {c}
+                                            </button>
+                                          ) : null)}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                             ))}
                             <button
                               type="button"
-                              onClick={() => setForm(p => { const tasks = [...p.tasks]; tasks[i] = { ...tasks[i], subtaskItems: [...tasks[i].subtaskItems, ''] }; return { ...p, tasks }; })}
+                              onClick={() => setForm(p => { const tasks = [...p.tasks]; tasks[i] = { ...tasks[i], subtaskItems: [...tasks[i].subtaskItems, emptySubtaskItem()] }; return { ...p, tasks }; })}
                               className="text-xs text-slate-400 hover:text-slate-600 underline"
                             >
                               + Додати пункт
@@ -947,7 +1034,7 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                       + Завдання
                     </button>
                     <button
-                      onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, { type: 'subtasks' as const, text: '', hasChoices: false, choices: [], correctChoice: null, points: 1, image_url: null, fillTemplate: '', fillAnswers: [], matchingPairs: [], subtaskItems: ['', ''] }] }))}
+                      onClick={() => setForm((p) => ({ ...p, tasks: [...p.tasks, { type: 'subtasks' as const, text: '', hasChoices: false, choices: [], correctChoice: null, points: 1, image_url: null, fillTemplate: '', fillAnswers: [], matchingPairs: [], subtaskItems: [emptySubtaskItem(), emptySubtaskItem()] }] }))}
                       className="rounded-xl border border-dashed border-orange-300 px-4 py-2 text-sm text-orange-600 hover:border-orange-500 hover:text-orange-700"
                     >
                       + Підзавдання а)б)в)
