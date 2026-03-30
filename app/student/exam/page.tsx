@@ -596,13 +596,22 @@ function ExamContent() {
         <p className="text-white text-xl font-semibold mb-2">✏️ Перш ніж почати</p>
         <p className="text-slate-400 text-sm mb-6">Підпишіть листочок як показано нижче</p>
 
-        {/* Імітація листочка зошита */}
-        <div className="relative w-full max-w-sm bg-white shadow-2xl rounded-sm" style={{ minHeight: '320px' }}>
-          {/* Сині горизонтальні лінії */}
-          {Array.from({ length: 15 }).map((_, i) => (
-            <div key={i} className="absolute left-0 right-0 border-b border-blue-100" style={{ top: `${24 + i * 22}px` }} />
-          ))}
-          {/* Червоне поле справа */}
+        {/* Імітація листочка зошита в клітинку */}
+        <div className="relative w-full max-w-sm shadow-2xl rounded-sm overflow-hidden" style={{ minHeight: '320px' }}>
+          {/* Клітинковий фон через SVG */}
+          <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#bfdbfe" strokeWidth="0.5" />
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="white" />
+            <rect width="100%" height="100%" fill="url(#grid)" />
+            {/* Червоне поле справа */}
+            <line x1="calc(100% - 48px)" y1="0" x2="calc(100% - 48px)" y2="100%" stroke="#f87171" strokeWidth="1" />
+          </svg>
+
+          {/* Червоне поле справа (через div, бо SVG calc не підтримує) */}
           <div className="absolute top-0 bottom-0 right-12 w-px bg-red-400" />
 
           {/* Текст підпису по центру */}
