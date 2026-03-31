@@ -350,6 +350,10 @@ function ExamContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId, durationSeconds, exitCount: focusLostCountRef.current }),
       });
+      // iOS заморожує таймери у фоні — перевіряємо тривалість при поверненні
+      if (durationSeconds >= 7) {
+        sendBlock('Учень був відсутній більше 7 секунд');
+      }
     }
 
     function onVisibilityChange() {
