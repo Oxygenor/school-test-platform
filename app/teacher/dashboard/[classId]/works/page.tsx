@@ -413,6 +413,10 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
             <Title>{displayClassName} клас — Роботи</Title>
             <p className="mt-1 text-slate-500 text-sm">
               Для дробів: <code className="bg-slate-100 px-1 rounded">$\frac{'{2}'}{'{3}'}$</code>
+              {' · '}
+              <a href="/teacher/math-guide" target="_blank" className="underline hover:text-slate-700">
+                Довідник формул
+              </a>
             </p>
           </div>
           <div className="flex gap-2">
