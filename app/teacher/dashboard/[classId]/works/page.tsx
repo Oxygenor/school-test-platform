@@ -315,6 +315,8 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
     { label: 'a/b', title: 'Дріб \\frac{}{}', snippet: '\\frac{}{}', cursor: 6 },
     { label: '√x', title: 'Корінь \\sqrt{}', snippet: '\\sqrt{}', cursor: 6 },
     { label: 'xⁿ', title: 'Степінь ^{}', snippet: '^{}', cursor: 2 },
+    { label: 'x₁', title: 'Індекс _{}', snippet: '_{}', cursor: 2 },
+    { label: 'F⃗', title: 'Вектор \\vec{}', snippet: '\\vec{}', cursor: 5 },
     { label: '·', title: 'Крапка множення', snippet: '\\cdot ', cursor: 6 },
     { label: '≤', title: 'Менше або рівне', snippet: '\\leq ', cursor: 5 },
     { label: '≥', title: 'Більше або рівне', snippet: '\\geq ', cursor: 5 },
