@@ -840,7 +840,7 @@ function ExamContent() {
                                                 : 'border-slate-300 bg-white text-slate-800 hover:bg-slate-100'
                                           }`}
                                         >
-                                          <span className="font-bold mr-1">{label})</span>{c}
+                                          <span className="font-bold mr-1">{label})</span><MathText text={c} />
                                         </div>
                                       );
                                     })}
@@ -993,7 +993,7 @@ function ExamContent() {
                                         : 'border-slate-300 bg-white text-slate-800 hover:bg-slate-100'
                                   }`}
                                 >
-                                  <span className="font-bold mr-1">{displayLabel})</span>{choices[origIdx]}
+                                  <span className="font-bold mr-1">{displayLabel})</span><MathText text={choices[origIdx]} />
                                 </div>
                               );
                             })}

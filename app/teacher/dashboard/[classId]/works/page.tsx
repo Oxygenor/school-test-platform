@@ -496,7 +496,7 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                                 <div className="mt-1 ml-5 flex flex-wrap gap-2">
                                   {choices.map((c, ci) => (
                                     <span key={ci} className="rounded-lg bg-white border border-slate-200 px-2 py-0.5 text-xs">
-                                      {CHOICE_LABELS[ci]}) {c}
+                                      {CHOICE_LABELS[ci]}) <MathText text={c} />
                                     </span>
                                   ))}
                                 </div>
@@ -823,7 +823,7 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                                               : 'border border-slate-300 text-slate-600 hover:bg-slate-100'
                                           }`}
                                         >
-                                          {CHOICE_LABELS[ci]}) {c}
+                                          {CHOICE_LABELS[ci]}) <MathText text={c} />
                                         </button>
                                       ) : null)}
                                     </div>
@@ -964,7 +964,7 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                                               onClick={() => setForm(p => { const tasks = [...p.tasks]; const items = [...tasks[i].subtaskItems]; items[si] = { ...items[si], correctChoice: items[si].correctChoice === ci ? null : ci }; tasks[i] = { ...tasks[i], subtaskItems: items }; return { ...p, tasks }; })}
                                               className={`rounded-lg px-2 py-0.5 text-xs font-bold transition ${item.correctChoice === ci ? 'bg-green-500 text-white' : 'border border-slate-300 text-slate-600 hover:bg-slate-100'}`}
                                             >
-                                              {CHOICE_LABELS[ci]}) {c}
+                                              {CHOICE_LABELS[ci]}) <MathText text={c} />
                                             </button>
                                           ) : null)}
                                         </div>
