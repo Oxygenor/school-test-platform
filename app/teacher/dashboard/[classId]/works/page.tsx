@@ -809,6 +809,19 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                                     + Додати варіант
                                   </button>
                                 )}
+                                {task.choices.some(c => c.trim()) && (
+                                  <div className="rounded-xl bg-slate-50 px-3 py-2">
+                                    <span className="text-xs text-slate-400">Прев&apos;ю:</span>
+                                    <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1">
+                                      {task.choices.map((c, ci) => c.trim() ? (
+                                        <div key={ci} className="flex items-center gap-1 text-sm">
+                                          <span className="text-xs font-bold text-slate-500 shrink-0">{CHOICE_LABELS[ci] ?? String.fromCharCode(65 + ci)})</span>
+                                          <MathText text={c} />
+                                        </div>
+                                      ) : null)}
+                                    </div>
+                                  </div>
+                                )}
                                 {form.onlineMode && task.choices.filter(c => c.trim()).length > 0 && (
                                   <div className="mt-2 pt-2 border-t border-slate-200">
                                     <p className="text-xs font-medium text-slate-600 mb-1">Правильна відповідь:</p>
@@ -956,6 +969,19 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                                         onClick={() => setForm(p => { const tasks = [...p.tasks]; const items = [...tasks[i].subtaskItems]; items[si] = { ...items[si], choices: [...items[si].choices, ''] }; tasks[i] = { ...tasks[i], subtaskItems: items }; return { ...p, tasks }; })}
                                         className="text-xs text-slate-400 hover:text-slate-600 underline"
                                       >+ Додати варіант</button>
+                                    )}
+                                    {item.choices.some(c => c.trim()) && (
+                                      <div className="rounded-lg bg-slate-50 px-2 py-1.5">
+                                        <span className="text-xs text-slate-400">Прев&apos;ю:</span>
+                                        <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5">
+                                          {item.choices.map((c, ci) => c.trim() ? (
+                                            <div key={ci} className="flex items-center gap-1 text-xs">
+                                              <span className="font-bold text-slate-500 shrink-0">{CHOICE_LABELS[ci] ?? String.fromCharCode(65 + ci)})</span>
+                                              <MathText text={c} />
+                                            </div>
+                                          ) : null)}
+                                        </div>
+                                      </div>
                                     )}
                                     {form.onlineMode && item.choices.filter(c => c.trim()).length > 0 && (
                                       <div className="pt-1 border-t border-slate-200">
