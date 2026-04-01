@@ -372,13 +372,29 @@ function ExamContent() {
       }
     }, 1000);
 
+    // pagehide/pageshow — iOS App Switcher: спрацьовують навіть коли
+    // document.hidden залишається false (live preview в App Switcher)
+    function onPageHide() { onHide(); }
+    function onPageShow() { onShow(); }
+    // freeze/resume — Page Lifecycle API (iOS 13+, Android Chrome)
+    function onFreeze() { onHide(); }
+    function onResume() { onShow(); }
+
     document.addEventListener('visibilitychange', onVisibilityChange);
     window.addEventListener('blur', onWindowBlur);
     window.addEventListener('focus', onWindowFocus);
+    window.addEventListener('pagehide', onPageHide);
+    window.addEventListener('pageshow', onPageShow);
+    document.addEventListener('freeze', onFreeze);
+    document.addEventListener('resume', onResume);
     return () => {
       document.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('blur', onWindowBlur);
       window.removeEventListener('focus', onWindowFocus);
+      window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('pageshow', onPageShow);
+      document.removeEventListener('freeze', onFreeze);
+      document.removeEventListener('resume', onResume);
       clearInterval(focusPoller);
       clearTimeout(exitTimerRef.current);
     };
