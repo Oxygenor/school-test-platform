@@ -162,8 +162,8 @@ export default function MathGuidePage() {
       <div className="mb-8 border-b-2 border-black pb-4">
         <h1 className="text-2xl font-bold">Довідник формул</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Формули вводяться між знаками <code className="rounded bg-slate-100 px-1">$…$</code>.
-          Наприклад: <code className="rounded bg-slate-100 px-1">$\frac{"{1}"}{"{"2}"}$</code>
+          Формули вводяться між знаками <code className="rounded bg-slate-100 px-1">{'$…$'}</code>.
+          Наприклад: <code className="rounded bg-slate-100 px-1">{'$\\frac{1}{2}$'}</code>
         </p>
       </div>
 
