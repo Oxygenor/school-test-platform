@@ -322,11 +322,6 @@ function ExamContent() {
       if (data.ok) setSession(data.session);
     }
 
-    // Сторінка "активна" тільки якщо вона видима І у фокусі
-    function isPageActive() {
-      return !document.hidden && document.hasFocus();
-    }
-
     function onHide() {
       if (exitStartRef.current !== null) return; // вже відстежується вихід
       exitStartRef.current = Date.now();
@@ -357,21 +352,22 @@ function ExamContent() {
     }
 
     function onVisibilityChange() {
-      if (document.hidden) onHide(); else if (isPageActive()) onShow();
+      // Не вимагаємо hasFocus() — повернення зі згорнутого стану не одразу дає фокус
+      if (document.hidden) onHide(); else onShow();
     }
     function onWindowBlur() {
-      // Спрацьовує і при overlay (Gemini) — не перевіряємо document.hidden
-      onHide();
+      // Спрацьовує при переключенні на інше вікно без згортання (overlay тощо)
+      if (!document.hidden) onHide();
     }
     function onWindowFocus() {
-      if (isPageActive()) onShow();
+      if (!document.hidden) onShow();
     }
 
-    // Поллінг кожну секунду — для випадків де blur не спрацьовує (деякі Android браузери)
+    // Поллінг кожну секунду — резервний для браузерів де події не спрацьовують
     const focusPoller = setInterval(() => {
-      if (!isPageActive() && exitStartRef.current === null) {
+      if (document.hidden && exitStartRef.current === null) {
         onHide();
-      } else if (isPageActive() && exitStartRef.current !== null) {
+      } else if (!document.hidden && exitStartRef.current !== null) {
         onShow();
       }
     }, 1000);
