@@ -38,112 +38,100 @@ function checkWinner(board: Cell[]): { winner: Cell | 'draw'; line: number[] | n
   return { winner: null, line: null };
 }
 
-// Оцінка позиції (без термінального стану)
+// Оцінка позиції для minimax
 function evaluate(board: Cell[]): number {
   let score = 0;
-  const mid = Math.floor(SIZE / 2);
   for (const line of LINES) {
     const os = line.filter(j => board[j] === 'O').length;
     const xs = line.filter(j => board[j] === 'X').length;
-    if (os > 0 && xs > 0) continue;
+    if (os > 0 && xs > 0) continue; // змішана лінія — не рахуємо
     if (os === 3) score += 10000;
-    else if (os === 2) score += 200;
+    else if (os === 2) score += 100;
     else if (os === 1) score += 10;
     if (xs === 3) score -= 10000;
-    else if (xs === 2) score -= 200;
+    else if (xs === 2) score -= 100;
     else if (xs === 1) score -= 10;
-  }
-  // Бонус за центр поля
-  for (let i = 0; i < TOTAL; i++) {
-    if (!board[i]) continue;
-    const r = Math.floor(i / SIZE), c = i % SIZE;
-    const bonus = (mid - Math.abs(r - mid)) + (mid - Math.abs(c - mid));
-    score += board[i] === 'O' ? bonus : -bonus;
   }
   return score;
 }
 
-// Кандидати — клітинки поруч із зайнятими (в радіусі 2), відсортовані за евристикою
+// Усі порожні клітинки поряд із зайнятими (радіус 1)
+// НЕ обрізаємо список — щоб не пропустити жоден блок
 function getCandidates(board: Cell[]): number[] {
-  const occupied = new Set<number>();
-  board.forEach((c, i) => { if (c) occupied.add(i); });
-  if (occupied.size === 0) return [Math.floor(TOTAL / 2)];
+  const occupied: number[] = [];
+  board.forEach((c, i) => { if (c) occupied.push(i); });
+  if (occupied.length === 0) return [Math.floor(TOTAL / 2)];
 
-  const cands = new Set<number>();
+  const seen = new Uint8Array(TOTAL);
+  const cands: number[] = [];
   for (const idx of occupied) {
     const r = Math.floor(idx / SIZE), c = idx % SIZE;
-    for (let dr = -2; dr <= 2; dr++)
-      for (let dc = -2; dc <= 2; dc++) {
+    for (let dr = -1; dr <= 1; dr++)
+      for (let dc = -1; dc <= 1; dc++) {
+        if (dr === 0 && dc === 0) continue;
         const nr = r + dr, nc = c + dc;
-        if (nr >= 0 && nr < SIZE && nc >= 0 && nc < SIZE && !board[nr * SIZE + nc])
-          cands.add(nr * SIZE + nc);
+        if (nr >= 0 && nr < SIZE && nc >= 0 && nc < SIZE) {
+          const pos = nr * SIZE + nc;
+          if (!board[pos] && !seen[pos]) { seen[pos] = 1; cands.push(pos); }
+        }
       }
   }
-  // Сортуємо за евристикою і беремо топ-12 для швидкості
-  return [...cands]
-    .sort((a, b) => {
-      let sa = 0, sb = 0;
-      const mid = Math.floor(SIZE / 2);
-      sa += (mid - Math.abs(Math.floor(a / SIZE) - mid)) + (mid - Math.abs(a % SIZE - mid));
-      sb += (mid - Math.abs(Math.floor(b / SIZE) - mid)) + (mid - Math.abs(b % SIZE - mid));
-      for (const line of LINES) {
-        if (line.includes(a)) {
-          const os = line.filter(j => board[j] === 'O').length;
-          const xs = line.filter(j => board[j] === 'X').length;
-          if (os === 0 || xs === 0) sa += os === 3 ? 500 : os === 2 ? 50 : xs === 3 ? 300 : xs === 2 ? 30 : 0;
-        }
-        if (line.includes(b)) {
-          const os = line.filter(j => board[j] === 'O').length;
-          const xs = line.filter(j => board[j] === 'X').length;
-          if (os === 0 || xs === 0) sb += os === 3 ? 500 : os === 2 ? 50 : xs === 3 ? 300 : xs === 2 ? 30 : 0;
-        }
-      }
-      return sb - sa;
-    })
-    .slice(0, 12);
+  return cands;
 }
 
-// Minimax з alpha-beta pruning
+// Minimax з alpha-beta pruning (in-place, швидкий)
 function minimax(board: Cell[], depth: number, alpha: number, beta: number, isMax: boolean): number {
   const { winner } = checkWinner(board);
-  if (winner === 'O') return 100000 + depth * 10; // виграш швидше — краще
-  if (winner === 'X') return -100000 - depth * 10;
+  if (winner === 'O') return 100000 + depth;
+  if (winner === 'X') return -100000 - depth;
   if (winner === 'draw' || depth === 0) return evaluate(board);
 
   const cands = getCandidates(board);
   if (cands.length === 0) return evaluate(board);
 
   let best = isMax ? -Infinity : Infinity;
+  const mark: Cell = isMax ? 'O' : 'X';
   for (const i of cands) {
-    board[i] = isMax ? 'O' : 'X';
+    board[i] = mark;
     const val = minimax(board, depth - 1, alpha, beta, !isMax);
     board[i] = null;
     if (isMax) { if (val > best) best = val; if (best > alpha) alpha = best; }
     else        { if (val < best) best = val; if (best < beta)  beta  = best; }
-    if (alpha >= beta) break; // відсікання
+    if (alpha >= beta) break;
   }
   return best;
 }
 
 function getAiMove(board: Cell[]): number {
-  const b = [...board];
-  const empty = b.reduce<number[]>((a, c, i) => (c ? a : [...a, i]), []);
+  const b = [...board] as Cell[];
+  // Збираємо порожні клітинки
+  const empty: number[] = [];
+  for (let i = 0; i < TOTAL; i++) if (!b[i]) empty.push(i);
 
-  // 1. Виграти негайно
+  // 1. Виграти негайно — перевіряємо ВСІ порожні
   for (const i of empty) {
-    b[i] = 'O'; if (checkWinner(b).winner === 'O') { b[i] = null; return i; } b[i] = null;
-  }
-  // 2. Заблокувати переможний хід гравця
-  for (const i of empty) {
-    b[i] = 'X'; if (checkWinner(b).winner === 'X') { b[i] = null; return i; } b[i] = null;
+    b[i] = 'O';
+    const win = checkWinner(b).winner === 'O';
+    b[i] = null;
+    if (win) return i;
   }
 
-  // 3. Minimax глибина 5 — бачить складні форки на 2-3 ходи вперед
+  // 2. Заблокувати перемогу гравця — перевіряємо ВСІ порожні
+  for (const i of empty) {
+    b[i] = 'X';
+    const win = checkWinner(b).winner === 'X';
+    b[i] = null;
+    if (win) return i;
+  }
+
+  // 3. Minimax глибина 5 по кандидатах (сусідні клітинки)
   const cands = getCandidates(b);
+  if (cands.length === 0) return empty[0];
+
   let best = -Infinity, bestMove = cands[0];
   for (const i of cands) {
     b[i] = 'O';
-    const score = minimax(b, 4, -Infinity, Infinity, false);
+    const score = minimax(b, 5, -Infinity, Infinity, false);
     b[i] = null;
     if (score > best) { best = score; bestMove = i; }
   }

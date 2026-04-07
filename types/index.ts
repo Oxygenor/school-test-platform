@@ -16,6 +16,7 @@ export interface StudentSession {
   started_at: string;
   updated_at: string;
   answers: Record<number, string> | null;
+  shuffle_order: Record<number, number[]> | null;
   score: number | null;
   teacher_message: string | null;
   extra_minutes: number;

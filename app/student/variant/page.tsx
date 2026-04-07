@@ -10,6 +10,7 @@ interface SubjectOption {
   subject: string;
   teacherId: string;
   teacherName: string;
+  prepEnabled?: boolean;
 }
 
 function VariantContent() {
@@ -138,14 +139,25 @@ function VariantContent() {
             </div>
             <div className="mt-6 grid gap-3">
               {subjects.map((opt) => (
-                <button
-                  key={`${opt.subject}__${opt.teacherId}`}
-                  onClick={() => setSelectedOption(opt)}
-                  className="w-full rounded-3xl bg-slate-950 px-6 py-5 text-left transition hover:bg-slate-800"
-                >
-                  <div className="text-xl font-semibold text-white">{opt.subject}</div>
-                  <div className="mt-1 text-sm text-slate-400">{opt.teacherName}</div>
-                </button>
+                <div key={`${opt.subject}__${opt.teacherId}`} className="flex gap-2">
+                  <button
+                    onClick={() => setSelectedOption(opt)}
+                    className="flex-1 rounded-3xl bg-slate-950 px-6 py-5 text-left transition hover:bg-slate-800"
+                  >
+                    <div className="text-xl font-semibold text-white">{opt.subject}</div>
+                    <div className="mt-1 text-sm text-slate-400">{opt.teacherName}</div>
+                  </button>
+                  {opt.prepEnabled && (
+                    <a
+                      href={`/student/prep?classId=${classId}&subject=${encodeURIComponent(opt.subject)}&teacherId=${opt.teacherId}&fullName=${encodeURIComponent(fullName ?? '')}`}
+                      className="flex flex-col items-center justify-center rounded-3xl bg-indigo-600 px-4 py-3 text-white transition hover:bg-indigo-500"
+                      title="AI-підготовка до роботи"
+                    >
+                      <span className="text-2xl">🤖</span>
+                      <span className="text-xs mt-1">Підготовка</span>
+                    </a>
+                  )}
+                </div>
               ))}
             </div>
           </Card>

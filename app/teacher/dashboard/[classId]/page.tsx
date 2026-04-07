@@ -22,6 +22,7 @@ interface StudentSession {
   block_reason: string | null;
   score: number | null;
   answers: Record<number, string> | null;
+  shuffle_order: Record<number, number[]> | null;
   extra_minutes: number;
 }
 
@@ -532,23 +533,42 @@ export default function TeacherClassPage({ params }: { params: Promise<{ classId
                       const studentAnswer = (answersStudent.answers ?? {})[i];
                       const isCorrect = correctLabel !== null && studentAnswer === correctLabel;
                       const isWrong = correctLabel !== null && studentAnswer && studentAnswer !== correctLabel;
+                      // Порядок варіантів для цього завдання (якщо є)
+                      const shuffled = answersStudent.shuffle_order?.[i];
+                      const hasChoices = taskObj?.choices?.length > 1;
                       return (
-                        <div key={i} className={`flex items-center justify-between rounded-xl px-3 py-2 text-sm ${isCorrect ? 'bg-green-50' : isWrong ? 'bg-red-50' : 'bg-slate-50'}`}>
-                          <span className="font-semibold text-slate-400 mr-2">{num}.</span>
-                          <span className="flex-1 text-slate-700 truncate">{typeof task === 'string' ? task : (task as any).text}</span>
-                          <div className="ml-3 flex items-center gap-2 shrink-0">
-                            {correctLabel && <span className="text-xs text-slate-400">{taskPoints} б</span>}
-                            {studentAnswer ? (
-                              <span className={`font-bold ${isCorrect ? 'text-green-600' : isWrong ? 'text-red-600' : 'text-slate-600'}`}>{studentAnswer}</span>
-                            ) : (
-                              <span className="text-slate-300">—</span>
-                            )}
-                            {correctLabel && (
-                              isCorrect
-                                ? <span className="text-green-600">✓</span>
-                                : <span className="text-slate-400 text-xs">({correctLabel})</span>
-                            )}
+                        <div key={i} className={`rounded-xl px-3 py-2 text-sm ${isCorrect ? 'bg-green-50' : isWrong ? 'bg-red-50' : 'bg-slate-50'}`}>
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-slate-400 mr-2">{num}.</span>
+                            <span className="flex-1 text-slate-700 truncate">{typeof task === 'string' ? task : (task as any).text}</span>
+                            <div className="ml-3 flex items-center gap-2 shrink-0">
+                              {correctLabel && <span className="text-xs text-slate-400">{taskPoints} б</span>}
+                              {studentAnswer ? (
+                                <span className={`font-bold ${isCorrect ? 'text-green-600' : isWrong ? 'text-red-600' : 'text-slate-600'}`}>{studentAnswer}</span>
+                              ) : (
+                                <span className="text-slate-300">—</span>
+                              )}
+                              {correctLabel && (
+                                isCorrect
+                                  ? <span className="text-green-600">✓</span>
+                                  : <span className="text-slate-400 text-xs">({correctLabel})</span>
+                              )}
+                            </div>
                           </div>
+                          {hasChoices && shuffled && (
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {shuffled.map((origIdx: number, displayPos: number) => {
+                                const shownLabel = CHOICE_LABELS[displayPos] ?? String.fromCharCode(65 + displayPos);
+                                const origLabel = CHOICE_LABELS[origIdx] ?? String.fromCharCode(65 + origIdx);
+                                const isCorrectMapping = origIdx === taskObj.correctChoice;
+                                return (
+                                  <span key={displayPos} className={`text-xs rounded px-1.5 py-0.5 ${isCorrectMapping ? 'bg-green-100 text-green-700 font-semibold' : 'bg-slate-100 text-slate-500'}`}>
+                                    {shownLabel}→{origLabel}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       );
                     });

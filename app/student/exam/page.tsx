@@ -168,7 +168,15 @@ function ExamContent() {
       }
     });
     shuffleOrderRef.current = order;
-  }, [dbWork]);
+    // Зберігаємо порядок на сервері щоб вчитель міг перевірити паперові відповіді
+    if (sessionId && Object.keys(order).length > 0) {
+      fetch('/api/save-shuffle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, shuffleOrder: order }),
+      });
+    }
+  }, [dbWork, sessionId]);
 
   // Блокування кнопки назад
   useEffect(() => {
@@ -302,9 +310,11 @@ function ExamContent() {
     return () => clearInterval(interval);
   }, [session, work, session?.extra_minutes]);
 
-  // Система блокування: макс 3 виходи, кожен не довше 7 секунд
+  // Система блокування: макс 2 виходи, кожен не довше 5 секунд
+  // Залежимо від sessionRef а не session — щоб effect не перезапускався
+  // при кожному polling-оновленні сесії (інакше таймер скасовується)
   useEffect(() => {
-    if (!sessionId || !session || session.status === 'blocked') return;
+    if (!sessionId || !sessionRef.current || sessionRef.current.status === 'blocked') return;
 
     let alreadyBlocked = false;
 
@@ -326,13 +336,13 @@ function ExamContent() {
       if (exitStartRef.current !== null) return; // вже відстежується вихід
       exitStartRef.current = Date.now();
       focusLostCountRef.current += 1;
-      if (focusLostCountRef.current > 3) {
+      if (focusLostCountRef.current >= 2) {
         sendBlock('Перевищено кількість виходів зі сторінки');
         return;
       }
       exitTimerRef.current = setTimeout(() => {
-        sendBlock('Учень був відсутній більше 7 секунд');
-      }, 7000);
+        sendBlock('Учень був відсутній більше 5 секунд');
+      }, 5000);
     }
 
     function onShow() {
@@ -346,8 +356,8 @@ function ExamContent() {
         body: JSON.stringify({ sessionId, durationSeconds, exitCount: focusLostCountRef.current }),
       });
       // iOS заморожує таймери у фоні — перевіряємо тривалість при поверненні
-      if (durationSeconds >= 7) {
-        sendBlock('Учень був відсутній більше 7 секунд');
+      if (durationSeconds >= 5) {
+        sendBlock('Учень був відсутній більше 5 секунд');
       }
     }
 
@@ -356,18 +366,23 @@ function ExamContent() {
       if (document.hidden) onHide(); else onShow();
     }
     function onWindowBlur() {
-      // Спрацьовує при переключенні на інше вікно без згортання (overlay тощо)
-      if (!document.hidden) onHide();
+      // Спрацьовує при переключенні на інше вікно / Android свайп між додатками.
+      // Не перевіряємо document.hidden — Android свайп може не змінювати hidden.
+      onHide();
     }
     function onWindowFocus() {
-      if (!document.hidden) onShow();
+      // onHide/onShow самі мають guard через exitStartRef — дублювань не буде.
+      onShow();
     }
 
-    // Поллінг кожну секунду — резервний для браузерів де події не спрацьовують
+    // Поллінг кожну секунду — резервний для браузерів де події не спрацьовують.
+    // Перевіряємо і document.hidden, і hasFocus() — Android свайп може не
+    // змінювати hidden, але прибирає фокус з документа.
     const focusPoller = setInterval(() => {
-      if (document.hidden && exitStartRef.current === null) {
+      const isHidden = document.hidden || !document.hasFocus();
+      if (isHidden && exitStartRef.current === null) {
         onHide();
-      } else if (!document.hidden && exitStartRef.current !== null) {
+      } else if (!isHidden && exitStartRef.current !== null) {
         onShow();
       }
     }, 1000);
@@ -387,6 +402,35 @@ function ExamContent() {
     window.addEventListener('pageshow', onPageShow);
     document.addEventListener('freeze', onFreeze);
     document.addEventListener('resume', onResume);
+
+    // Повноекранний режим (Android Chrome)
+    // Запитуємо при першому дотику — браузер не дозволяє без user gesture
+    let fullscreenEntered = false;
+    function requestFs() {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+    }
+    document.addEventListener('touchstart', requestFs, { once: true });
+    document.addEventListener('click', requestFs, { once: true });
+    function onFullscreenChange() {
+      if (document.fullscreenElement) {
+        fullscreenEntered = true;
+      } else if (fullscreenEntered) {
+        // Учень свідомо вийшов з повноекранного режиму
+        sendBlock('Учень вийшов з повноекранного режиму');
+      }
+    }
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+
+    // Split screen detection (Android)
+    // Висота вікна < 55% висоти екрану → розділений екран
+    // Клавіатура зазвичай залишає ≥ 55%, split screen дає рівно 50%
+    function onWindowResize() {
+      if (window.innerHeight < window.screen.height * 0.55) {
+        sendBlock('Виявлено розділений екран');
+      }
+    }
+    window.addEventListener('resize', onWindowResize);
+
     return () => {
       document.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('blur', onWindowBlur);
@@ -395,10 +439,14 @@ function ExamContent() {
       window.removeEventListener('pageshow', onPageShow);
       document.removeEventListener('freeze', onFreeze);
       document.removeEventListener('resume', onResume);
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+      window.removeEventListener('resize', onWindowResize);
       clearInterval(focusPoller);
       clearTimeout(exitTimerRef.current);
     };
-  }, [sessionId, session]);
+  // session?.status: ефект перезапускається тільки при зміні статусу (не при кожному polling)
+  // Це важливо — без session сесія може ще не завантажитись; без status нічого зайвого не тригерить
+  }, [sessionId, session?.status]);
 
   function handleMatchingLeftClick(taskIndex: number, origLeftIdx: number) {
     if (!dbWork?.online_mode) return;

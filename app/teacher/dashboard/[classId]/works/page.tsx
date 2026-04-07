@@ -31,6 +31,7 @@ interface DbWork {
   duration_minutes: number;
   tasks: StoredTask[];
   online_mode: boolean;
+  prep_enabled: boolean;
 }
 
 interface SubtaskItemForm {
@@ -300,6 +301,19 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
     setTimeout(() => { setCopyingWork(null); setCopySuccess(''); }, 1200);
   }
 
+  async function togglePrep(work: DbWork) {
+    const enabled = !work.prep_enabled;
+    const res = await fetch('/api/toggle-prep', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-teacher-token': token },
+      body: JSON.stringify({ workId: work.id, enabled }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      setWorks((prev) => prev.map((w) => w.id === work.id ? { ...w, prep_enabled: enabled } : w));
+    }
+  }
+
   async function deleteWork(work: DbWork) {
     if (!confirm(`Видалити роботу "${work.title}"?`)) return;
     const res = await fetch(
@@ -475,6 +489,13 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                             Копіювати
                           </button>
                         )}
+                        <button
+                          onClick={() => togglePrep(work)}
+                          className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${work.prep_enabled ? 'bg-indigo-600 text-white' : 'border border-slate-300 text-slate-700 hover:bg-slate-50'}`}
+                          title={work.prep_enabled ? 'Підготовка увімкнена — натисни щоб вимкнути' : 'Увімкнути AI-підготовку для учнів'}
+                        >
+                          🤖 {work.prep_enabled ? 'Підготовка ✓' : 'Підготовка'}
+                        </button>
                         <button
                           onClick={() => deleteWork(work)}
                           className="rounded-xl bg-red-500 px-3 py-2 text-xs text-white"
