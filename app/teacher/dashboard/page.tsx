@@ -36,6 +36,7 @@ interface ClassStatus {
   loading: boolean;
   showKey: boolean;
   sessionCode: string | null;
+  prepCode: string | null;
 }
 
 export default function TeacherDashboardPage() {
@@ -62,12 +63,12 @@ export default function TeacherDashboardPage() {
     if (!data.ok) return;
 
     const results = await Promise.all(
-      data.classes.map(async ({ classId }: { classId: number }) => {
+      data.classes.map(async ({ classId, prepCode }: { classId: number; prepCode: string | null }) => {
         const r = await fetch(`/api/exam-status?classId=${classId}`, {
           headers: { 'x-teacher-token': t },
         });
         const d = await r.json();
-        return { classId, className: idToClassName(classId), active: d.active ?? false, loading: false, showKey: false, sessionCode: d.session_code ?? null };
+        return { classId, className: idToClassName(classId), active: d.active ?? false, loading: false, showKey: false, sessionCode: d.session_code ?? null, prepCode: prepCode ?? null };
       })
     );
     setStatuses(results);
@@ -104,7 +105,7 @@ export default function TeacherDashboardPage() {
     if (!data.ok) { setAddError(data.error ?? 'Помилка'); return; }
     setNewClassName('');
     const className = idToClassName(id);
-    setStatuses((prev) => [...prev, { classId: id, className, active: false, loading: false, showKey: false, sessionCode: null }].sort((a, b) => a.classId - b.classId));
+    setStatuses((prev) => [...prev, { classId: id, className, active: false, loading: false, showKey: false, sessionCode: null, prepCode: null }].sort((a, b) => a.classId - b.classId));
   }
 
   async function deleteClass(classId: number, className: string) {
@@ -181,6 +182,15 @@ export default function TeacherDashboardPage() {
                   <p className="text-xs font-medium text-green-600 mb-1">Код для учнів</p>
                   <p className="text-4xl font-bold tracking-[0.3em] text-green-700">{sessionCode}</p>
                   <p className="text-xs text-green-500 mt-1">Продиктуйте учням</p>
+                </div>
+              )}
+
+              {/* Постійний код підготовки */}
+              {prepCode && (
+                <div className="mt-3 rounded-2xl bg-indigo-50 border border-indigo-200 px-4 py-3 text-center">
+                  <p className="text-xs font-medium text-indigo-600 mb-1">🤖 Код підготовки (постійний)</p>
+                  <p className="text-4xl font-bold tracking-[0.3em] text-indigo-700">{prepCode}</p>
+                  <p className="text-xs text-indigo-400 mt-1">Учні використовують вдома для практики</p>
                 </div>
               )}
 

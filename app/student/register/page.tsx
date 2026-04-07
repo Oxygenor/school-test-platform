@@ -14,6 +14,7 @@ interface StudentItem {
 export default function StudentRegisterPage() {
   const router = useRouter();
 
+  const [mode, setMode] = useState<'exam' | 'prep'>('exam');
   const [code, setCode] = useState('');
   const [codeError, setCodeError] = useState('');
   const [verifyingCode, setVerifyingCode] = useState(false);
@@ -22,6 +23,7 @@ export default function StudentRegisterPage() {
   const [className, setClassName] = useState('');
   const [teacherId, setTeacherId] = useState('');
   const [teacherName, setTeacherName] = useState('');
+  const [prepOnly, setPrepOnly] = useState(false);
 
   const [students, setStudents] = useState<StudentItem[]>([]);
   const [selectedStudentId, setSelectedStudentId] = useState('');
@@ -45,20 +47,34 @@ export default function StudentRegisterPage() {
     checkExistingSession();
   }, [router]);
 
+  function resetCode() {
+    setClassId(null);
+    setClassName('');
+    setCode('');
+    setStudents([]);
+    setSelectedStudentId('');
+    setPrepOnly(false);
+    setCodeError('');
+  }
+
   async function verifyCode() {
     const trimmed = code.trim();
     if (trimmed.length !== 6) { setCodeError('Код має бути 6 цифр'); return; }
     setVerifyingCode(true);
     setCodeError('');
-    const res = await fetch(`/api/session-code?code=${trimmed}`);
+
+    const endpoint = mode === 'prep' ? `/api/prep-code?code=${trimmed}` : `/api/session-code?code=${trimmed}`;
+    const res = await fetch(endpoint);
     const data = await res.json();
     setVerifyingCode(false);
+
     if (!data.ok) { setCodeError(data.error || 'Невірний код'); return; }
 
     setClassId(data.classId);
     setClassName(data.className ?? String(data.classId));
     setTeacherId(data.teacherId);
     setTeacherName(data.teacherName);
+    setPrepOnly(data.prepOnly ?? false);
 
     setLoadingStudents(true);
     const r = await fetch(`/api/students?classId=${data.classId}`);
@@ -70,14 +86,34 @@ export default function StudentRegisterPage() {
   function nextStep() {
     const student = students.find((s) => s.id === selectedStudentId);
     if (!classId || !student) return;
-    const params = new URLSearchParams({
-      classId: String(classId),
-      studentId: student.id,
-      fullName: student.full_name,
-      teacherId,
-      teacherName,
-    });
-    router.push(`/student/variant?${params.toString()}`);
+
+    if (prepOnly) {
+      // Одразу на підготовку
+      const params = new URLSearchParams({
+        classId: String(classId),
+        subject: '', // завантажиться на сторінці підготовки
+        teacherId,
+        fullName: student.full_name,
+      });
+      // Переходимо на variant — там покажемо тільки підготовку
+      const variantParams = new URLSearchParams({
+        classId: String(classId),
+        studentId: student.id,
+        fullName: student.full_name,
+        teacherId,
+        teacherName,
+      });
+      router.push(`/student/variant?${variantParams.toString()}`);
+    } else {
+      const params = new URLSearchParams({
+        classId: String(classId),
+        studentId: student.id,
+        fullName: student.full_name,
+        teacherId,
+        teacherName,
+      });
+      router.push(`/student/variant?${params.toString()}`);
+    }
   }
 
   return (
@@ -87,9 +123,28 @@ export default function StudentRegisterPage() {
           <Title>Вхід учня</Title>
 
           {!classId ? (
-            // Крок 1: Введення коду
             <div className="mt-6 space-y-4">
-              <p className="text-slate-500 text-sm">Введіть 6-значний код який дав вчитель</p>
+              {/* Перемикач режиму */}
+              <div className="flex rounded-2xl bg-slate-100 p-1">
+                <button
+                  onClick={() => { setMode('exam'); setCode(''); setCodeError(''); }}
+                  className={`flex-1 rounded-xl py-2 text-sm font-semibold transition ${mode === 'exam' ? 'bg-white shadow text-slate-900' : 'text-slate-500'}`}
+                >
+                  Іспит
+                </button>
+                <button
+                  onClick={() => { setMode('prep'); setCode(''); setCodeError(''); }}
+                  className={`flex-1 rounded-xl py-2 text-sm font-semibold transition ${mode === 'prep' ? 'bg-indigo-600 shadow text-white' : 'text-slate-500'}`}
+                >
+                  🤖 Підготовка
+                </button>
+              </div>
+
+              <p className="text-slate-500 text-sm">
+                {mode === 'exam'
+                  ? 'Введіть 6-значний код який дав вчитель'
+                  : 'Введіть код підготовки від вчителя'}
+              </p>
               <input
                 type="text"
                 inputMode="numeric"
@@ -114,6 +169,7 @@ export default function StudentRegisterPage() {
               <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
                 <div>Клас: <strong>{className}</strong></div>
                 <div>Вчитель: <strong>{teacherName}</strong></div>
+                {prepOnly && <div className="mt-1 text-indigo-600 font-medium">🤖 Режим підготовки</div>}
               </div>
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-700">Оберіть себе зі списку</label>
@@ -134,7 +190,7 @@ export default function StudentRegisterPage() {
               </Button>
               <Button
                 className="w-full bg-slate-200 text-slate-900 hover:bg-slate-300"
-                onClick={() => { setClassId(null); setClassName(''); setCode(''); setStudents([]); setSelectedStudentId(''); }}
+                onClick={resetCode}
               >
                 Змінити код
               </Button>

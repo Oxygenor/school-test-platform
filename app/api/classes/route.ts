@@ -10,7 +10,7 @@ export async function GET(req: Request) {
 
   const { data, error } = await supabaseAdmin
     .from('teacher_classes')
-    .select('class_id')
+    .select('class_id, prep_code')
     .eq('teacher_id', teacher.id)
     .order('class_id');
 
@@ -18,7 +18,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
 
-  const classes = data.map((c) => ({ classId: c.class_id }));
+  const classes = data.map((c) => ({ classId: c.class_id, prepCode: c.prep_code ?? null }));
 
   return NextResponse.json({ ok: true, classes });
 }
@@ -74,10 +74,11 @@ export async function POST(req: Request) {
     await supabaseAdmin.from('classes').insert({ id });
   }
 
+  const prepCode = String(Math.floor(100000 + Math.random() * 900000));
   const { error } = await supabaseAdmin
     .from('teacher_classes')
     .upsert(
-      { teacher_id: teacher.id, class_id: id },
+      { teacher_id: teacher.id, class_id: id, prep_code: prepCode },
       { onConflict: 'teacher_id,class_id', ignoreDuplicates: true }
     );
 
