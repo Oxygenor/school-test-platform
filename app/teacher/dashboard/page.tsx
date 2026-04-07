@@ -167,7 +167,7 @@ export default function TeacherDashboardPage() {
 
         {/* Класи */}
         <div className="grid gap-4 md:grid-cols-3">
-          {statuses.map(({ classId, className, active, loading, showKey, sessionCode }) => (
+          {statuses.map(({ classId, className, active, loading, showKey, sessionCode, prepCode }) => (
             <Card key={classId}>
               <div className="flex items-center justify-between">
                 <span className="text-2xl font-bold">{className} клас</span>
