@@ -2,10 +2,30 @@
 
 import { Suspense, useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+}
+
+function AssistantMessage({ content }: { content: string }) {
+  return (
+    <div className="prose prose-invert prose-sm max-w-none text-slate-100
+      prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0
+      prose-headings:text-white prose-strong:text-white
+      prose-code:text-indigo-300 prose-code:bg-slate-700 prose-code:px-1 prose-code:rounded">
+      <ReactMarkdown
+        remarkPlugins={[remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  );
 }
 
 function PrepContent() {
@@ -41,10 +61,9 @@ function PrepContent() {
 
   useEffect(() => {
     if (messages.length === 0 && tasks.length > 0) {
-      // Автоматичне привітання від ШІ
       setMessages([{
         role: 'assistant',
-        content: `Привіт${fullName ? `, ${fullName}` : ''}! 👋 Я допоможу тобі підготуватись до роботи з предмету **${subject}**.\n\nМожу:\n— Дати тобі практичні завдання\n— Пояснити як вирішувати подібні приклади\n— Відповісти на питання по темі\n\nЗ чого почнемо? Напиши "дай завдання" або постав своє питання.`,
+        content: `Привіт${fullName ? `, ${fullName}` : ''}! 👋 Я допоможу тобі підготуватись до роботи з предмету **${subject}**.\n\nМожу:\n- Дати тобі практичні завдання\n- Пояснити як вирішувати подібні приклади\n- Відповісти на питання по темі\n\nЗ чого почнемо? Напиши **"дай завдання"** або постав своє питання.`,
       }]);
     }
   }, [tasks, fullName, subject, messages.length]);
@@ -63,7 +82,6 @@ function PrepContent() {
     const newMessages: Message[] = [...messages, { role: 'user', content: text }];
     setMessages(newMessages);
 
-    // Передаємо тільки останні 10 повідомлень як історію (без першого привітання)
     const history = newMessages.slice(1, -1).slice(-10);
 
     try {
@@ -121,12 +139,15 @@ function PrepContent() {
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap ${
+            <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm ${
               msg.role === 'user'
                 ? 'bg-indigo-600 text-white rounded-br-sm'
                 : 'bg-slate-800 text-slate-100 rounded-bl-sm'
             }`}>
-              {msg.content}
+              {msg.role === 'user'
+                ? <span className="whitespace-pre-wrap">{msg.content}</span>
+                : <AssistantMessage content={msg.content} />
+              }
             </div>
           </div>
         ))}
