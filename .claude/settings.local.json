@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(npm install:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(node -e \"const Anthropic = require\\('@anthropic-ai/sdk'\\); console.log\\('OK'\\);\")",
+      "Bash(curl -s -X POST http://localhost:3000/api/ai-prep -H \"Content-Type: application/json\" -d \"{\\\\\"tasks\\\\\":[\\\\\"тест\\\\\"],\\\\\"subject\\\\\":\\\\\"Математика\\\\\",\\\\\"message\\\\\":\\\\\"привіт\\\\\"}\")"
     ]
   }
 }

@@ -42,7 +42,7 @@ ${taskList}
     ];
 
     const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: 'claude-haiku-4-5',
       max_tokens: 1024,
       system: systemPrompt,
       messages,
@@ -52,6 +52,7 @@ ${taskList}
 
     return NextResponse.json({ ok: true, reply });
   } catch (e: any) {
+    console.error('ai-prep error:', e);
     return NextResponse.json({ ok: false, error: e.message || 'Помилка AI' }, { status: 500 });
   }
 }
