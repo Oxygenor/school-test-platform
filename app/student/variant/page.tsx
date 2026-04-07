@@ -10,7 +10,8 @@ interface SubjectOption {
   subject: string;
   teacherId: string;
   teacherName: string;
-  prepEnabled?: boolean;
+  examActive: boolean;
+  prepEnabled: boolean;
 }
 
 function VariantContent() {
@@ -21,12 +22,10 @@ function VariantContent() {
   const fullName = params.get('fullName');
   const studentId = params.get('studentId');
   const teacherIdParam = params.get('teacherId');
-  const teacherNameParam = params.get('teacherName');
 
   const [subjects, setSubjects] = useState<SubjectOption[]>([]);
   const [selectedOption, setSelectedOption] = useState<SubjectOption | null>(null);
-  const [examActive, setExamActive] = useState<boolean | null>(null);
-  const [loadingSubjects, setLoadingSubjects] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   // Перевіряємо існуючу сесію
   useEffect(() => {
@@ -46,21 +45,15 @@ function VariantContent() {
     checkExistingSession();
   }, [router]);
 
-  // Завантажуємо предмети для конкретного вчителя (з коду сесії)
   const loadSubjects = useCallback(async () => {
     if (!classId || !teacherIdParam) return;
-    setLoadingSubjects(true);
     const res = await fetch(`/api/student-subjects?classId=${classId}`);
     const data = await res.json();
     if (data.ok) {
-      // Фільтруємо тільки предмети цього вчителя
       const filtered = data.subjects.filter((s: SubjectOption) => s.teacherId === teacherIdParam);
       setSubjects(filtered);
-      setExamActive(filtered.length > 0);
-    } else {
-      setExamActive(false);
     }
-    setLoadingSubjects(false);
+    setLoaded(true);
   }, [classId, teacherIdParam]);
 
   useEffect(() => {
@@ -99,8 +92,7 @@ function VariantContent() {
     router.push(`/student/exam?sessionId=${data.session.id}`);
   }
 
-  // Завантаження
-  if (examActive === null || loadingSubjects && subjects.length === 0) {
+  if (!loaded) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-950">
         <div className="text-slate-400">Завантаження...</div>
@@ -108,8 +100,12 @@ function VariantContent() {
     );
   }
 
-  // Немає активних іспитів
-  if (examActive === false || subjects.length === 0) {
+  const hasAnything = subjects.length > 0;
+  const hasExam = subjects.some((s) => s.examActive);
+  const hasPrep = subjects.some((s) => s.prepEnabled);
+
+  // Немає ні іспиту ні підготовки
+  if (!hasAnything) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 px-6 text-white">
         <div className="w-full max-w-sm text-center">
@@ -121,6 +117,37 @@ function VariantContent() {
           </p>
           <div className="mt-2 text-sm text-slate-600">{fullName}</div>
           <TicTacToe />
+        </div>
+      </div>
+    );
+  }
+
+  // Є тільки підготовка (іспит ще не відкритий)
+  if (!hasExam && hasPrep) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 px-6 text-white">
+        <div className="w-full max-w-sm text-center">
+          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-indigo-900 text-4xl">🤖</div>
+          <h1 className="text-2xl font-bold">Підготовка до роботи</h1>
+          <p className="mt-3 text-slate-400">
+            Іспит ще не розпочато. Поки що можеш попрактикуватись з AI-помічником.
+          </p>
+          <div className="mt-6 grid gap-3">
+            {subjects.filter((s) => s.prepEnabled).map((opt) => (
+              <a
+                key={`${opt.subject}__${opt.teacherId}`}
+                href={`/student/prep?classId=${classId}&subject=${encodeURIComponent(opt.subject)}&teacherId=${opt.teacherId}&fullName=${encodeURIComponent(fullName ?? '')}`}
+                className="flex items-center gap-4 rounded-3xl bg-indigo-600 px-6 py-5 text-left transition hover:bg-indigo-500"
+              >
+                <span className="text-3xl">🤖</span>
+                <div>
+                  <div className="text-lg font-semibold">{opt.subject}</div>
+                  <div className="text-sm text-indigo-200">{opt.teacherName} · Підготовка</div>
+                </div>
+              </a>
+            ))}
+          </div>
+          <div className="mt-4 text-sm text-slate-600">{fullName}</div>
         </div>
       </div>
     );
@@ -140,13 +167,20 @@ function VariantContent() {
             <div className="mt-6 grid gap-3">
               {subjects.map((opt) => (
                 <div key={`${opt.subject}__${opt.teacherId}`} className="flex gap-2">
-                  <button
-                    onClick={() => setSelectedOption(opt)}
-                    className="flex-1 rounded-3xl bg-slate-950 px-6 py-5 text-left transition hover:bg-slate-800"
-                  >
-                    <div className="text-xl font-semibold text-white">{opt.subject}</div>
-                    <div className="mt-1 text-sm text-slate-400">{opt.teacherName}</div>
-                  </button>
+                  {opt.examActive ? (
+                    <button
+                      onClick={() => setSelectedOption(opt)}
+                      className="flex-1 rounded-3xl bg-slate-950 px-6 py-5 text-left transition hover:bg-slate-800"
+                    >
+                      <div className="text-xl font-semibold text-white">{opt.subject}</div>
+                      <div className="mt-1 text-sm text-slate-400">{opt.teacherName}</div>
+                    </button>
+                  ) : (
+                    <div className="flex-1 rounded-3xl bg-slate-800 px-6 py-5 opacity-50 cursor-not-allowed">
+                      <div className="text-xl font-semibold text-white">{opt.subject}</div>
+                      <div className="mt-1 text-sm text-slate-400">{opt.teacherName} · Іспит не розпочато</div>
+                    </div>
+                  )}
                   {opt.prepEnabled && (
                     <a
                       href={`/student/prep?classId=${classId}&subject=${encodeURIComponent(opt.subject)}&teacherId=${opt.teacherId}&fullName=${encodeURIComponent(fullName ?? '')}`}

@@ -12,6 +12,13 @@ interface Message {
   content: string;
 }
 
+// Прибираємо зворотні лапки навколо формул: `$...$` → $...$
+function fixMath(content: string): string {
+  return content
+    .replace(/`(\$\$[\s\S]+?\$\$)`/g, '$1')
+    .replace(/`(\$[^`\n]+?\$)`/g, '$1');
+}
+
 function AssistantMessage({ content }: { content: string }) {
   return (
     <div className="prose prose-invert prose-sm max-w-none text-slate-100
@@ -22,7 +29,7 @@ function AssistantMessage({ content }: { content: string }) {
         remarkPlugins={[remarkMath]}
         rehypePlugins={[rehypeKatex]}
       >
-        {content}
+        {fixMath(content)}
       </ReactMarkdown>
     </div>
   );
