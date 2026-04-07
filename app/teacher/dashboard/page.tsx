@@ -207,6 +207,9 @@ export default function TeacherDashboardPage() {
                 <Link href={`/teacher/dashboard/${classId}/works`} className="w-full rounded-2xl border border-slate-300 py-3 text-center text-sm font-medium text-slate-700 hover:bg-slate-50">
                   Керувати роботами
                 </Link>
+                <Link href={`/teacher/dashboard/${classId}/prep-stats`} className="w-full rounded-2xl border border-indigo-200 py-3 text-center text-sm font-medium text-indigo-600 hover:bg-indigo-50">
+                  📊 Статистика підготовки
+                </Link>
                 <button onClick={() => deleteClass(classId, className)} className="w-full rounded-2xl border border-red-200 py-3 text-center text-sm font-medium text-red-500 hover:bg-red-50">
                   Видалити клас
                 </button>
