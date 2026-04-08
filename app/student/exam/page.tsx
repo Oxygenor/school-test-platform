@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useLayoutEffect, useMemo, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { works } from '@/data/works';
 import { StudentSession } from '@/types';
 import { formatSeconds } from '@/lib/utils';
 import Calculator from '@/components/calculator';
@@ -284,7 +283,7 @@ function ExamContent() {
       durationMinutes: dbWork.duration_minutes,
       tasks: dbWork.tasks,
     };
-    return works[session.class_id][session.variant];
+    return null;
   }, [session, dbWork]);
 
   useEffect(() => {
