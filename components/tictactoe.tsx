@@ -200,7 +200,7 @@ export default function TicTacToe() {
       <div className="rounded-3xl bg-slate-800 px-6 py-6 w-full max-w-sm">
         <div className="mb-4 text-center">
           <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-1">Поки чекаєш — зіграй</p>
-          <h3 className="text-lg font-bold text-white">Виграй штучний інтелект 1 раз та отримай "відмінно"</h3>
+          <h3 className="text-lg font-bold text-white">Спробуй виграти штучний інтелект хоча би 1 раз</h3>
           <p className="text-xs text-slate-500 mt-0.5">Ти — X, ШІ — O · Зроби 4 поспіль</p>
         </div>
 

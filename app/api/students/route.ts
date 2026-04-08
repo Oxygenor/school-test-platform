@@ -5,7 +5,7 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const classId = searchParams.get('classId');
 
-  if (!classId || ![6, 7, 9, 10].includes(Number(classId))) {
+  if (!classId || Number(classId) < 1 || Number(classId) > 12) {
     return NextResponse.json({ ok: false, error: 'Некоректний клас' }, { status: 400 });
   }
 
