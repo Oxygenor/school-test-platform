@@ -194,7 +194,7 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
     fetch('/api/classes', { headers: { 'x-teacher-token': saved } })
       .then((r) => r.json())
       .then((d) => {
-        if (d.ok) setAllClasses(d.classes.filter((c: number) => c !== numericClassId));
+        if (d.ok) setAllClasses(d.classes.map((c: { classId: number }) => c.classId).filter((c: number) => c !== numericClassId));
       });
   }, []);
 
