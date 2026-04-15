@@ -394,9 +394,14 @@ function ExamContent() {
     function onFreeze() { onHide(); }
     function onResume() { onShow(); }
 
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
     document.addEventListener('visibilitychange', onVisibilityChange);
-    window.addEventListener('blur', onWindowBlur);
-    window.addEventListener('focus', onWindowFocus);
+    // На iOS blur/focus ненадійні — спрацьовують при відкритті клавіатури
+    if (!isIOS) {
+      window.addEventListener('blur', onWindowBlur);
+      window.addEventListener('focus', onWindowFocus);
+    }
     window.addEventListener('pagehide', onPageHide);
     window.addEventListener('pageshow', onPageShow);
     document.addEventListener('freeze', onFreeze);
@@ -420,11 +425,9 @@ function ExamContent() {
     }
     document.addEventListener('fullscreenchange', onFullscreenChange);
 
-    // Split screen detection (Android)
-    // Висота вікна < 55% висоти екрану → розділений екран
-    // Клавіатура зазвичай залишає ≥ 55%, split screen дає рівно 50%
+    // Split screen detection (Android тільки — на iOS клавіатура зменшує innerHeight)
     function onWindowResize() {
-      if (window.innerHeight < window.screen.height * 0.55) {
+      if (!isIOS && window.innerHeight < window.screen.height * 0.55) {
         sendBlock('Виявлено розділений екран');
       }
     }
@@ -432,8 +435,10 @@ function ExamContent() {
 
     return () => {
       document.removeEventListener('visibilitychange', onVisibilityChange);
-      window.removeEventListener('blur', onWindowBlur);
-      window.removeEventListener('focus', onWindowFocus);
+      if (!isIOS) {
+        window.removeEventListener('blur', onWindowBlur);
+        window.removeEventListener('focus', onWindowFocus);
+      }
       window.removeEventListener('pagehide', onPageHide);
       window.removeEventListener('pageshow', onPageShow);
       document.removeEventListener('freeze', onFreeze);
