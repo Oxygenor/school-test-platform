@@ -17,7 +17,10 @@ interface Message {
 function fixMath(content: string): string {
   return content
     .replace(/`(\$\$[\s\S]+?\$\$)`/g, '$1')
-    .replace(/`(\$[^`\n]+?\$)`/g, '$1');
+    .replace(/`(\$[^`\n]+?\$)`/g, '$1')
+    // Переконуємось що $$ завжди на окремому рядку — інакше remark-math читає як два $
+    .replace(/([^\n])\$\$/g, '$1\n$$')
+    .replace(/\$\$([^\n])/g, '$$\n$1');
 }
 
 function AssistantMessage({ content }: { content: string }) {
