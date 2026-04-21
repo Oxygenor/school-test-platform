@@ -31,7 +31,9 @@ export async function POST(req: Request) {
 
   const { classId } = await req.json();
   const id = Number(classId);
-  if (!id || id < 1 || id > 12) {
+  const isSimple = id >= 1 && id <= 12;
+  const isLettered = id >= 101 && Math.floor(id / 100) >= 1 && Math.floor(id / 100) <= 12 && (id % 100) >= 1 && (id % 100) <= 34;
+  if (!id || (!isSimple && !isLettered)) {
     return NextResponse.json({ ok: false, error: 'Введіть номер від 1 до 12' }, { status: 400 });
   }
 
