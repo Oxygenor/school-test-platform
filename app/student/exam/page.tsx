@@ -593,6 +593,16 @@ function ExamContent() {
     }
   }
 
+  function origToDisplayLabel(taskIndex: number, origLabel: string): string {
+    const shuffled = shuffleOrderRef.current[taskIndex];
+    if (!shuffled || !origLabel) return origLabel;
+    const origIdx = CHOICE_LABELS.indexOf(origLabel);
+    if (origIdx === -1) return origLabel;
+    const displayPos = shuffled.indexOf(origIdx);
+    if (displayPos === -1) return origLabel;
+    return CHOICE_LABELS[displayPos] ?? origLabel;
+  }
+
   async function finishWork() {
     if (!sessionId || finishing) return;
     setFinishing(true);
@@ -1205,8 +1215,8 @@ function ExamContent() {
                     <span className="font-medium text-slate-700">Завдання {r.taskIndex + 1}</span>
                     <div className="flex items-center gap-3 text-xs">
                       {r.points && <span className={`font-bold ${r.isCorrect ? 'text-green-600' : 'text-slate-400'}`}>{r.isCorrect ? `+${r.points}` : '0'} б</span>}
-                      <span className="text-slate-500">Ваша: <strong>{r.answer || '—'}</strong></span>
-                      {!r.isCorrect && <span className="text-green-700">Правильна: <strong>{r.correctAnswer}</strong></span>}
+                      <span className="text-slate-500">Ваша: <strong>{r.answer ? origToDisplayLabel(r.taskIndex, r.answer) : '—'}</strong></span>
+                      {!r.isCorrect && <span className="text-green-700">Правильна: <strong>{origToDisplayLabel(r.taskIndex, r.correctAnswer)}</strong></span>}
                       <span className={r.isCorrect ? 'text-green-600 text-base' : 'text-red-500 text-base'}>{r.isCorrect ? '✓' : '✗'}</span>
                     </div>
                   </div>
