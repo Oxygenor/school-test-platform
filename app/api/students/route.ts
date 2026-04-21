@@ -5,14 +5,17 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const classId = searchParams.get('classId');
 
-  if (!classId || Number(classId) < 1 || Number(classId) > 12) {
+  const id = Number(classId);
+  const isSimple = id >= 1 && id <= 12;
+  const isLettered = id >= 101 && Math.floor(id / 100) >= 1 && Math.floor(id / 100) <= 12 && (id % 100) >= 1 && (id % 100) <= 34;
+  if (!classId || (!isSimple && !isLettered)) {
     return NextResponse.json({ ok: false, error: 'Некоректний клас' }, { status: 400 });
   }
 
   const { data, error } = await supabaseAdmin
     .from('students')
     .select('*')
-    .eq('class_id', Number(classId))
+    .eq('class_id', id)
     .eq('is_active', true)
     .order('full_name', { ascending: true });
 
