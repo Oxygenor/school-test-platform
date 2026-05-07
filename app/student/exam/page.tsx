@@ -61,6 +61,8 @@ function ExamContent() {
   const focusLostCountRef = useRef(0);
   const exitTimerRef = useRef<any>(null);
   const exitStartRef = useRef<number | null>(null);
+  const pendingBlockRef = useRef<string | null>(null);
+  const alreadyBlockedRef = useRef(false);
 
   // Налаштування з localStorage
   useEffect(() => {
@@ -315,20 +317,31 @@ function ExamContent() {
   useEffect(() => {
     if (!sessionId || !sessionRef.current || sessionRef.current.status === 'blocked') return;
 
-    let alreadyBlocked = false;
+    // Скидаємо прапорці при кожному запуску ефекту
+    alreadyBlockedRef.current = false;
+    pendingBlockRef.current = null;
 
     async function sendBlock(reason: string) {
-      if (alreadyBlocked) return;
-      alreadyBlocked = true;
+      if (alreadyBlockedRef.current) return;
+      alreadyBlockedRef.current = true;
       clearTimeout(exitTimerRef.current);
-      const response = await fetch('/api/block-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, reason }),
-      });
-      const data = await response.json();
-      // Оновлюємо стан тільки після підтвердження від сервера
-      if (data.ok) setSession(data.session);
+      try {
+        const response = await fetch('/api/block-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId, reason }),
+        });
+        const data = await response.json();
+        if (data.ok) {
+          setSession(data.session);
+        } else {
+          // Дозволяємо повторну спробу якщо сервер відмовив
+          alreadyBlockedRef.current = false;
+        }
+      } catch {
+        // Мережева помилка — дозволяємо повторну спробу при наступному onShow
+        alreadyBlockedRef.current = false;
+      }
     }
 
     function onHide() {
@@ -336,12 +349,13 @@ function ExamContent() {
       exitStartRef.current = Date.now();
       focusLostCountRef.current += 1;
       if (focusLostCountRef.current >= 2) {
-        sendBlock('Перевищено кількість виходів зі сторінки');
+        // НЕ викликаємо fetch тут — iOS заморожує JS разом з fetch при pagehide.
+        // Зберігаємо причину і блокуємо в onShow коли JS знову активний.
+        pendingBlockRef.current = 'Перевищено кількість виходів зі сторінки';
         return;
       }
-      exitTimerRef.current = setTimeout(() => {
-        sendBlock('Учень був відсутній більше 5 секунд');
-      }, 5000);
+      // Таймер не потрібен — iOS заморожує setTimeout у фоні.
+      // Тривалість перевіряється в onShow після повернення.
     }
 
     function onShow() {
@@ -349,15 +363,27 @@ function ExamContent() {
       clearTimeout(exitTimerRef.current);
       const durationSeconds = Math.floor((Date.now() - exitStartRef.current) / 1000);
       exitStartRef.current = null;
+
+      // Блокування через кількість виходів (встановлено в onHide)
+      const pendingReason = pendingBlockRef.current;
+      pendingBlockRef.current = null;
+      if (pendingReason) {
+        sendBlock(pendingReason);
+        return;
+      }
+
+      // Блокування через тривалість відсутності (iOS-safe: JS активний тут)
+      if (durationSeconds >= 5) {
+        sendBlock('Учень був відсутній більше 5 секунд');
+        return;
+      }
+
+      // Лише логування — учень повернувся вчасно
       fetch('/api/log-exit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId, durationSeconds, exitCount: focusLostCountRef.current }),
       });
-      // iOS заморожує таймери у фоні — перевіряємо тривалість при поверненні
-      if (durationSeconds >= 5) {
-        sendBlock('Учень був відсутній більше 5 секунд');
-      }
     }
 
     function onVisibilityChange() {
