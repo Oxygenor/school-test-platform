@@ -130,6 +130,37 @@ function ExamContent() {
       const response = await fetch(`/api/get-session?sessionId=${sessionId}`);
       const data = await response.json();
       if (data.ok) {
+        // iOS може вбити вкладку при тривалому фоновому режимі і перезавантажити її.
+        // При перезавантаженні всі рефи скидаються, тому перевіряємо localStorage.
+        if (data.session.status === 'writing') {
+          const exitKey = `examExit_${sessionId}`;
+          const stored = localStorage.getItem(exitKey);
+          if (stored) {
+            try {
+              const { timestamp, count } = JSON.parse(stored);
+              const durationSeconds = Math.floor((Date.now() - timestamp) / 1000);
+              localStorage.removeItem(exitKey);
+              focusLostCountRef.current = count;
+              if (count >= 2 || durationSeconds >= 5) {
+                const reason = count >= 2
+                  ? 'Перевищено кількість виходів зі сторінки'
+                  : 'Учень був відсутній більше 5 секунд';
+                const blockRes = await fetch('/api/block-session', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ sessionId, reason }),
+                });
+                const blockData = await blockRes.json();
+                if (blockData.ok) {
+                  setSession(blockData.session);
+                  setLoading(false);
+                  return;
+                }
+              }
+            } catch {}
+          }
+        }
+
         setSession(data.session);
         const worksRes = await fetch(`/api/works?classId=${data.session.class_id}`, {
           headers: data.session.teacher_id
@@ -348,6 +379,11 @@ function ExamContent() {
       if (exitStartRef.current !== null) return; // вже відстежується вихід
       exitStartRef.current = Date.now();
       focusLostCountRef.current += 1;
+      // Зберігаємо в localStorage: якщо iOS вб'є вкладку, loadSession знайде цей запис
+      localStorage.setItem(`examExit_${sessionId}`, JSON.stringify({
+        timestamp: exitStartRef.current,
+        count: focusLostCountRef.current,
+      }));
       if (focusLostCountRef.current >= 2) {
         // НЕ викликаємо fetch тут — iOS заморожує JS разом з fetch при pagehide.
         // Зберігаємо причину і блокуємо в onShow коли JS знову активний.
@@ -360,6 +396,8 @@ function ExamContent() {
 
     function onShow() {
       if (exitStartRef.current === null) return; // нічого не відстежується
+      // Учень повернувся — прибираємо маркер із localStorage (сторінка не перезавантажилась)
+      localStorage.removeItem(`examExit_${sessionId}`);
       clearTimeout(exitTimerRef.current);
       const durationSeconds = Math.floor((Date.now() - exitStartRef.current) / 1000);
       exitStartRef.current = null;
