@@ -32,6 +32,8 @@ interface DbWork {
   tasks: StoredTask[];
   online_mode: boolean;
   prep_enabled: boolean;
+  calculator_enabled: boolean;
+  draft_enabled: boolean;
 }
 
 interface SubtaskItemForm {
@@ -63,6 +65,8 @@ interface FormState {
   durationMinutes: number;
   tasks: TaskForm[];
   onlineMode: boolean;
+  calculatorEnabled: boolean;
+  draftEnabled: boolean;
 }
 
 const CHOICE_LABELS = ['А', 'Б', 'В', 'Г', 'Д'];
@@ -145,6 +149,8 @@ const emptyForm = (): FormState => ({
   durationMinutes: 40,
   tasks: [EMPTY_TASK()],
   onlineMode: false,
+  calculatorEnabled: true,
+  draftEnabled: true,
 });
 
 const UA_LETTERS = 'абвгґдеєжзиіїйклмнопрстуфхцчшщьюя';
@@ -225,6 +231,8 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
       durationMinutes: work.duration_minutes,
       tasks: work.tasks.length > 0 ? work.tasks.map(taskToForm) : [EMPTY_TASK()],
       onlineMode: work.online_mode ?? false,
+      calculatorEnabled: work.calculator_enabled ?? true,
+      draftEnabled: work.draft_enabled ?? true,
     });
     setEditingWork(work);
     setSaveError('');
@@ -260,6 +268,8 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
         durationMinutes: form.durationMinutes,
         tasks: filteredTasks,
         onlineMode: form.onlineMode,
+        calculatorEnabled: form.calculatorEnabled,
+        draftEnabled: form.draftEnabled,
       }),
     });
 
@@ -292,6 +302,8 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
         title: copyingWork.title,
         durationMinutes: copyingWork.duration_minutes,
         tasks: copyingWork.tasks,
+        calculatorEnabled: copyingWork.calculator_enabled,
+        draftEnabled: copyingWork.draft_enabled,
       }),
     });
     const data = await res.json();
@@ -673,6 +685,34 @@ export default function WorksPage({ params }: { params: Promise<{ classId: strin
                     <div>
                       <div className="font-medium text-slate-800">Режим онлайн відповідей</div>
                       <div className="text-xs text-slate-500">Учні вибирають відповіді на платформі, система автоматично виставляє оцінку</div>
+                    </div>
+                  </label>
+                </div>
+
+                {/* Калькулятор і чернетка */}
+                <div className="flex gap-4">
+                  <label className="flex flex-1 items-center gap-3 cursor-pointer rounded-2xl border border-slate-200 p-4">
+                    <input
+                      type="checkbox"
+                      checked={form.calculatorEnabled}
+                      onChange={(e) => setForm((p) => ({ ...p, calculatorEnabled: e.target.checked }))}
+                      className="h-4 w-4 rounded"
+                    />
+                    <div>
+                      <div className="font-medium text-slate-800">🧮 Калькулятор</div>
+                      <div className="text-xs text-slate-500">Дозволити учням користуватись калькулятором</div>
+                    </div>
+                  </label>
+                  <label className="flex flex-1 items-center gap-3 cursor-pointer rounded-2xl border border-slate-200 p-4">
+                    <input
+                      type="checkbox"
+                      checked={form.draftEnabled}
+                      onChange={(e) => setForm((p) => ({ ...p, draftEnabled: e.target.checked }))}
+                      className="h-4 w-4 rounded"
+                    />
+                    <div>
+                      <div className="font-medium text-slate-800">✏️ Чернетка</div>
+                      <div className="text-xs text-slate-500">Дозволити учням користуватись чернеткою</div>
                     </div>
                   </label>
                 </div>

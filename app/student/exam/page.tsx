@@ -26,7 +26,7 @@ function ExamContent() {
 
   const [showSignReminder, setShowSignReminder] = useState(true);
   const [session, setSession] = useState<StudentSession | null>(null);
-  const [dbWork, setDbWork] = useState<{ work_type: string; title: string; duration_minutes: number; tasks: any[]; online_mode: boolean } | null>(null);
+  const [dbWork, setDbWork] = useState<{ work_type: string; title: string; duration_minutes: number; tasks: any[]; online_mode: boolean; calculator_enabled?: boolean; draft_enabled?: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
   const [calcOpen, setCalcOpen] = useState(false);
   const [draftOpen, setDraftOpen] = useState(false);
@@ -1163,47 +1163,55 @@ function ExamContent() {
       </div>
 
       {/* Калькулятор */}
-      {calcOpen && <Calculator onClose={() => setCalcOpen(false)} />}
-      <button
-        onClick={() => setCalcOpen(prev => !prev)}
-        className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-white shadow-xl text-2xl"
-        aria-label="Калькулятор"
-      >
-        🧮
-      </button>
+      {(dbWork?.calculator_enabled ?? true) && (
+        <>
+          {calcOpen && <Calculator onClose={() => setCalcOpen(false)} />}
+          <button
+            onClick={() => setCalcOpen(prev => !prev)}
+            className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-white shadow-xl text-2xl"
+            aria-label="Калькулятор"
+          >
+            🧮
+          </button>
+        </>
+      )}
 
       {/* Чернетка */}
-      {draftOpen && (
-        <div className="fixed bottom-24 right-6 z-40 w-72 rounded-2xl bg-white shadow-2xl border border-slate-200 flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-2 bg-slate-900">
-            <span className="text-sm font-semibold text-white">✏️ Чернетка</span>
-            <button onClick={() => setDraftOpen(false)} className="text-slate-400 hover:text-white text-xl leading-none">×</button>
-          </div>
-          <textarea
-            value={draftText}
-            onChange={(e) => setDraftText(e.target.value)}
-            placeholder="Тут можна записувати чорновики, розрахунки..."
-            className="flex-1 resize-none p-3 text-sm text-slate-800 outline-none"
-            style={{ minHeight: '220px' }}
-          />
-          <div className="px-3 py-2 border-t border-slate-100">
-            <button
-              onClick={() => setDraftText('')}
-              className="text-xs text-slate-400 hover:text-red-500"
-            >
-              Очистити
-            </button>
-          </div>
-        </div>
+      {(dbWork?.draft_enabled ?? true) && (
+        <>
+          {draftOpen && (
+            <div className="fixed bottom-24 right-6 z-40 w-72 rounded-2xl bg-white shadow-2xl border border-slate-200 flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-2 bg-slate-900">
+                <span className="text-sm font-semibold text-white">✏️ Чернетка</span>
+                <button onClick={() => setDraftOpen(false)} className="text-slate-400 hover:text-white text-xl leading-none">×</button>
+              </div>
+              <textarea
+                value={draftText}
+                onChange={(e) => setDraftText(e.target.value)}
+                placeholder="Тут можна записувати чорновики, розрахунки..."
+                className="flex-1 resize-none p-3 text-sm text-slate-800 outline-none"
+                style={{ minHeight: '220px' }}
+              />
+              <div className="px-3 py-2 border-t border-slate-100">
+                <button
+                  onClick={() => setDraftText('')}
+                  className="text-xs text-slate-400 hover:text-red-500"
+                >
+                  Очистити
+                </button>
+              </div>
+            </div>
+          )}
+          <button
+            onClick={() => setDraftOpen(prev => !prev)}
+            className="fixed bottom-22 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-amber-500 text-white shadow-xl text-2xl"
+            aria-label="Чернетка"
+            style={{ bottom: '5.5rem' }}
+          >
+            ✏️
+          </button>
+        </>
       )}
-      <button
-        onClick={() => setDraftOpen(prev => !prev)}
-        className="fixed bottom-22 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-amber-500 text-white shadow-xl text-2xl"
-        aria-label="Чернетка"
-        style={{ bottom: '5.5rem' }}
-      >
-        ✏️
-      </button>
 
       {/* Попередження: пропущені завдання */}
       {skippedWarning.length > 0 && (

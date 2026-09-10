@@ -89,6 +89,8 @@ create table public.works (
   tasks            jsonb not null default '[]',
   online_mode      boolean not null default false,
   prep_enabled     boolean not null default false,
+  calculator_enabled boolean not null default true,
+  draft_enabled      boolean not null default true,
   created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now(),
   unique (class_id, variant, subject, teacher_id)

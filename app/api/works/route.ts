@@ -42,7 +42,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { classId, variant, subject, workType, title, durationMinutes, tasks, onlineMode } =
+  const { classId, variant, subject, workType, title, durationMinutes, tasks, onlineMode, calculatorEnabled, draftEnabled } =
     await req.json();
 
   if (!classId) {
@@ -79,6 +79,8 @@ export async function POST(req: Request) {
         duration_minutes: Number(durationMinutes),
         tasks,
         online_mode: onlineMode ?? false,
+        calculator_enabled: calculatorEnabled ?? true,
+        draft_enabled: draftEnabled ?? true,
         teacher_id: teacher.id,
       },
       { onConflict: 'class_id,variant,subject,teacher_id' }
