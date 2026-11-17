@@ -29,3 +29,17 @@ input,
 select {
   font: inherit;
 }
+
+/* Математичний помічник: читабельні формули на вузьких екранах */
+.math-md .katex {
+  font-size: 1.12em;
+}
+.math-md .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 0;
+  margin: 0.5em 0;
+}
+.math-md .katex .mfrac .frac-line {
+  border-bottom-width: 0.06em;
+}

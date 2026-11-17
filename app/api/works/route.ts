@@ -1,39 +1,44 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { requireTeacher } from '@/lib/teacher-auth';
+import { getTeacherFromToken, requireTeacher } from '@/lib/teacher-auth';
+import { resolveWorks, type SessionRow, type WorkRow } from '@/lib/works-access';
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const classId = Number(searchParams.get('classId'));
-
-  if (!classId) {
-    return NextResponse.json({ ok: false, error: 'Некоректний клас' }, { status: 400 });
+  try {
+    const result = await resolveWorks(
+      {
+        token: req.headers.get('x-teacher-token'),
+        classId: searchParams.get('classId'),
+        sessionId: searchParams.get('sessionId'),
+        variant: searchParams.get('variant'),
+        subject: searchParams.get('subject'),
+      },
+      {
+        getTeacher: getTeacherFromToken,
+        async getSession(sessionId) {
+          const { data } = await supabaseAdmin
+            .from('student_sessions')
+            .select('id, class_id, teacher_id, variant, subject, status')
+            .eq('id', sessionId)
+            .maybeSingle();
+          return (data as SessionRow) ?? null;
+        },
+        async listWorks({ classId, teacherId, variant, subject }) {
+          let query = supabaseAdmin.from('works').select('*').eq('class_id', classId).order('subject').order('variant');
+          if (teacherId) query = query.eq('teacher_id', teacherId);
+          if (variant) query = query.eq('variant', variant);
+          if (subject) query = query.eq('subject', subject);
+          const { data, error } = await query;
+          if (error) throw error;
+          return (data || []) as WorkRow[];
+        },
+      },
+    );
+    return NextResponse.json(result.body, { status: result.status });
+  } catch {
+    return NextResponse.json({ ok: false, error: 'Помилка сервера' }, { status: 500 });
   }
-
-  const teacher = await requireTeacher(req);
-  // Альтернативний фільтр для сторінки учня (без авторизації)
-  const teacherIdFilter = req.headers.get('x-teacher-id-filter');
-
-  let query = supabaseAdmin
-    .from('works')
-    .select('*')
-    .eq('class_id', classId)
-    .order('subject')
-    .order('variant');
-
-  if (teacher) {
-    query = query.eq('teacher_id', teacher.id);
-  } else if (teacherIdFilter) {
-    query = query.eq('teacher_id', teacherIdFilter);
-  }
-
-  const { data, error } = await query;
-
-  if (error) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-  }
-
-  return NextResponse.json({ ok: true, works: data || [] });
 }
 
 export async function POST(req: Request) {

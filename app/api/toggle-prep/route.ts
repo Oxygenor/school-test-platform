@@ -15,7 +15,7 @@ export async function POST(req: Request) {
 
   const { error } = await supabaseAdmin
     .from('works')
-    .update({ prep_enabled: enabled })
+    .update({ prep_enabled: enabled === true })
     .eq('id', workId)
     .eq('teacher_id', teacher.id);
 

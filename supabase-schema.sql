@@ -155,9 +155,17 @@ create table public.prep_logs (
   student_name text,
   subject      text,
   message      text not null,
+  student_id   uuid references public.students(id) on delete set null,
+  mode         text,
+  model        text,
+  input_tokens integer,
+  output_tokens integer,
+  cache_read_tokens integer,
+  cache_write_tokens integer,
   created_at   timestamptz not null default now()
 );
 create index idx_prep_logs_class_teacher on public.prep_logs(class_id, teacher_id, created_at);
+create index idx_prep_logs_student_created on public.prep_logs(student_id, created_at);
 
 -- ---------------------------------------------------------------------------
 -- Row Level Security: the app only ever talks to Postgres through the

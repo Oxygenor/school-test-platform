@@ -26,7 +26,15 @@ function PrintWorkContent() {
 
   useEffect(() => {
     if (!classId) return;
-    fetch(`/api/works?classId=${classId}`)
+    const token = sessionStorage.getItem('teacherToken') || '';
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+    const q = new URLSearchParams({ classId });
+    if (variant) q.set('variant', variant);
+    if (subject) q.set('subject', subject);
+    fetch(`/api/works?${q.toString()}`, { headers: { 'x-teacher-token': token } })
       .then((r) => r.json())
       .then((d) => {
         if (d.ok) {
@@ -52,7 +60,11 @@ function PrintWorkContent() {
   }
 
   if (!work) {
-    return <div className="p-8 text-center text-slate-500">Роботу не знайдено.</div>;
+    return (
+      <div className="p-8 text-center text-slate-500">
+        Роботу не знайдено. Відкрийте друк зі сторінки робіт після входу як учитель.
+      </div>
+    );
   }
 
   return (

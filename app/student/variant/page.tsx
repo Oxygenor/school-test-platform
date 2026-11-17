@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { Card, PageContainer, Title } from '@/components/ui';
 import { StudentSessionGuard } from '@/components/student-session-guard';
 import TicTacToe from '@/components/tictactoe';
+import { isMathSubject } from '@/lib/math-helper/topics';
 
 interface SubjectOption {
   subject: string;
@@ -102,7 +103,8 @@ function VariantContent() {
 
   const hasAnything = subjects.length > 0;
   const hasExam = subjects.some((s) => s.examActive);
-  const hasPrep = subjects.some((s) => s.prepEnabled);
+  const canPrep = (s: SubjectOption) => s.prepEnabled && isMathSubject(s.subject);
+  const hasPrep = subjects.some(canPrep);
 
   // Немає ні іспиту ні підготовки
   if (!hasAnything) {
@@ -130,13 +132,13 @@ function VariantContent() {
           <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-indigo-900 text-4xl">🤖</div>
           <h1 className="text-2xl font-bold">Підготовка до роботи</h1>
           <p className="mt-3 text-slate-400">
-            Іспит ще не розпочато. Поки що можеш попрактикуватись з AI-помічником.
+            Іспит ще не розпочато. Поки що можеш попрактикуватися з Математичним помічником.
           </p>
           <div className="mt-6 grid gap-3">
-            {subjects.filter((s) => s.prepEnabled).map((opt) => (
+            {subjects.filter(canPrep).map((opt) => (
               <a
                 key={`${opt.subject}__${opt.teacherId}`}
-                href={`/student/prep?classId=${classId}&subject=${encodeURIComponent(opt.subject)}&teacherId=${opt.teacherId}&fullName=${encodeURIComponent(fullName ?? '')}`}
+                href={`/student/prep?subject=${encodeURIComponent(opt.subject)}`}
                 className="flex items-center gap-4 rounded-3xl bg-indigo-600 px-6 py-5 text-left transition hover:bg-indigo-500"
               >
                 <span className="text-3xl">🤖</span>
@@ -181,9 +183,9 @@ function VariantContent() {
                       <div className="mt-1 text-sm text-slate-400">{opt.teacherName} · Іспит не розпочато</div>
                     </div>
                   )}
-                  {opt.prepEnabled && (
+                  {canPrep(opt) && (
                     <a
-                      href={`/student/prep?classId=${classId}&subject=${encodeURIComponent(opt.subject)}&teacherId=${opt.teacherId}&fullName=${encodeURIComponent(fullName ?? '')}`}
+                      href={`/student/prep?subject=${encodeURIComponent(opt.subject)}`}
                       className="flex flex-col items-center justify-center rounded-3xl bg-indigo-600 px-4 py-3 text-white transition hover:bg-indigo-500"
                       title="AI-підготовка до роботи"
                     >

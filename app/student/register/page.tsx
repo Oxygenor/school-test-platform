@@ -83,37 +83,52 @@ export default function StudentRegisterPage() {
     setLoadingStudents(false);
   }
 
-  function nextStep() {
+  const [startingPrep, setStartingPrep] = useState(false);
+
+  async function nextStep() {
     const student = students.find((s) => s.id === selectedStudentId);
     if (!classId || !student) return;
 
-    if (prepOnly) {
-      // Одразу на підготовку
-      const params = new URLSearchParams({
-        classId: String(classId),
-        subject: '', // завантажиться на сторінці підготовки
-        teacherId,
-        fullName: student.full_name,
+    // Сервер перевіряє код і належність учня до класу та видає
+    // короткоживучу сесію підготовки (якщо підготовку відкрито).
+    setStartingPrep(true);
+    try {
+      const res = await fetch('/api/prep-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: code.trim(), kind: prepOnly ? 'prep' : 'exam', studentId: student.id }),
       });
-      // Переходимо на variant — там покажемо тільки підготовку
-      const variantParams = new URLSearchParams({
-        classId: String(classId),
-        studentId: student.id,
-        fullName: student.full_name,
-        teacherId,
-        teacherName,
-      });
-      router.push(`/student/variant?${variantParams.toString()}`);
-    } else {
-      const params = new URLSearchParams({
-        classId: String(classId),
-        studentId: student.id,
-        fullName: student.full_name,
-        teacherId,
-        teacherName,
-      });
-      router.push(`/student/variant?${params.toString()}`);
+      const data = await res.json();
+      try {
+        if (data.ok && data.prepToken) {
+          sessionStorage.setItem('prepToken', data.prepToken);
+          sessionStorage.setItem('prepStudentName', student.full_name.split(/\s+/)[1] || student.full_name);
+        } else {
+          sessionStorage.removeItem('prepToken');
+        }
+      } catch {}
+      if (!data.ok && prepOnly) {
+        setCodeError(data.error || 'Не вдалося відкрити підготовку');
+        setStartingPrep(false);
+        return;
+      }
+    } catch {
+      if (prepOnly) {
+        setCodeError("Помилка з'єднання. Спробуй ще раз.");
+        setStartingPrep(false);
+        return;
+      }
     }
+    setStartingPrep(false);
+
+    const params = new URLSearchParams({
+      classId: String(classId),
+      studentId: student.id,
+      fullName: student.full_name,
+      teacherId,
+      teacherName,
+    });
+    router.push(`/student/variant?${params.toString()}`);
   }
 
   return (
@@ -185,8 +200,9 @@ export default function StudentRegisterPage() {
                   ))}
                 </select>
               </div>
-              <Button onClick={nextStep} disabled={!selectedStudentId} className="w-full">
-                Далі
+              {codeError && <p className="text-sm text-red-600 text-center">{codeError}</p>}
+              <Button onClick={nextStep} disabled={!selectedStudentId || startingPrep} className="w-full">
+                {startingPrep ? 'Зачекай...' : 'Далі'}
               </Button>
               <Button
                 className="w-full bg-slate-200 text-slate-900 hover:bg-slate-300"

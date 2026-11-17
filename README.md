@@ -20,6 +20,21 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Математичний помічник (`/student/prep`)
+
+Серверні змінні (лише сервер, без префікса `NEXT_PUBLIC_`):
+
+| Змінна | Обов’язкова | Призначення |
+| --- | --- | --- |
+| `ANTHROPIC_API_KEY` | так | ключ Anthropic API |
+| `ANTHROPIC_MODEL` | ні | модель, типово `claude-haiku-5-5` |
+| `PREP_SESSION_SECRET` | рекомендовано | ≥32 випадкові символи для підпису сесій підготовки; без неї ключ виводиться з `SUPABASE_SERVICE_ROLE_KEY` |
+| `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL` | так | як і раніше |
+
+Міграція `supabase-migration-math-helper.sql` (необов’язкова): спільний для всіх інстансів ліміт частоти й облік токенів у `prep_logs`.
+
+Тести (з імітацією Anthropic API, без мережі й без бази): `npm test`.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

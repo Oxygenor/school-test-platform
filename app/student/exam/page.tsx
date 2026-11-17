@@ -162,11 +162,8 @@ function ExamContent() {
         }
 
         setSession(data.session);
-        const worksRes = await fetch(`/api/works?classId=${data.session.class_id}`, {
-          headers: data.session.teacher_id
-            ? { 'x-teacher-id-filter': data.session.teacher_id }
-            : {},
-        });
+        // Сервер віддає лише призначений цій сесії варіант (без ключів відповідей).
+        const worksRes = await fetch(`/api/works?sessionId=${encodeURIComponent(sessionId)}`);
         const worksData = await worksRes.json();
         if (worksData.ok && worksData.works.length > 0) {
           const found = worksData.works.find(
